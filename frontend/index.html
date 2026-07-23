@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dataval 報告檢視器</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#1d2127; --muted:#6b7280; --line:#e5e7eb;
+    --ok:#15803d; --ok-bg:#dcfce7; --bad:#b91c1c; --bad-bg:#fee2e2;
+    --warn:#b45309; --warn-bg:#fef3c7; --info:#1d4ed8; --info-bg:#dbeafe;
+    --gating:#374151; --advisory:#7c3aed; --accent:#2563eb;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0f1115; --card:#171a21; --ink:#e6e8ec; --muted:#9aa0aa;
+      --line:#2a2f3a; --ok-bg:#052e1a; --bad-bg:#3a1013; --warn-bg:#3a2a06; --info-bg:#0c2145; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.6; }
+  .wrap{ max-width:1080px; margin:0 auto; padding:24px 18px 64px; }
+  h1{ font-size:20px; font-weight:600; margin:0 0 2px; }
+  .sub{ color:var(--muted); font-size:13px; margin-bottom:16px; }
+  a{ color:var(--accent); }
+
+  /* drop zone / empty state */
+  #drop{ border:2px dashed var(--line); border-radius:14px; padding:44px 20px;
+    text-align:center; background:var(--card); transition:border-color .15s,background .15s; }
+  #drop.hot{ border-color:var(--accent); background:var(--info-bg); }
+  #drop h2{ font-size:16px; margin:0 0 6px; }
+  #drop p{ color:var(--muted); font-size:13.5px; margin:6px 0; }
+  .btn{ display:inline-block; margin-top:8px; padding:9px 16px; border-radius:9px;
+    background:var(--accent); color:#fff; font-size:14px; cursor:pointer; border:none; }
+  .err{ color:var(--bad); font-size:13px; margin-top:10px; }
+
+  .verdict{ display:inline-flex; align-items:center; gap:8px; font-size:18px;
+    font-weight:600; padding:8px 16px; border-radius:10px; }
+  .verdict.ok{ color:var(--ok); background:var(--ok-bg); }
+  .verdict.bad{ color:var(--bad); background:var(--bad-bg); }
+  .cards{ display:flex; flex-wrap:wrap; gap:10px; margin:16px 0 8px; }
+  .kpi{ flex:1; min-width:88px; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; padding:10px 14px; }
+  .kpi .n{ font-size:20px; font-weight:600; }
+  .kpi .l{ font-size:12px; color:var(--muted); }
+  .kpi.bad .n{ color:var(--bad); } .kpi.warn .n{ color:var(--warn); }
+  .kpi.ok .n{ color:var(--ok); }
+  .meta{ background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:10px 14px; font-size:13px; color:var(--muted); margin:8px 0 16px; }
+  .meta b{ color:var(--ink); font-weight:600; }
+
+  .blk{ background:var(--card); border:1px solid var(--line); border-left:3px solid var(--bad);
+    border-radius:10px; padding:12px 14px; margin:12px 0; }
+  .blk h3{ font-size:14px; margin:0 0 8px; color:var(--bad); }
+  .blk li{ font-size:13px; margin:4px 0; }
+  .blk .rule{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; }
+
+  .controls{ position:sticky; top:0; background:var(--bg); padding:10px 0;
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center; z-index:5;
+    border-bottom:1px solid var(--line); margin-top:8px; }
+  .controls input[type=search]{ flex:1; min-width:180px; padding:8px 12px;
+    border:1px solid var(--line); border-radius:8px; background:var(--card);
+    color:var(--ink); font-size:14px; }
+  .chip{ padding:6px 12px; border:1px solid var(--line); border-radius:999px;
+    background:var(--card); color:var(--ink); font-size:13px; cursor:pointer; user-select:none; }
+  .chip.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+
+  .cat{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+    margin:14px 0; overflow:hidden; }
+  .cat-head{ width:100%; text-align:left; background:none; border:none; color:var(--ink);
+    padding:14px 16px; font-size:15px; cursor:pointer; display:flex; align-items:center; gap:10px; }
+  .cat-title{ font-weight:600; } .cat-meta{ color:var(--muted); font-size:13px; margin-left:auto; }
+  .chev{ transition:transform .15s; font-size:12px; color:var(--muted); }
+  .cat.collapsed .chev{ transform:rotate(-90deg); }
+  .cat.collapsed .cat-body{ display:none; }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th,td{ text-align:left; padding:9px 12px; border-top:1px solid var(--line); vertical-align:top; }
+  th{ color:var(--muted); font-weight:500; font-size:12px; }
+  .mono{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; }
+  .src{ color:var(--muted); }
+  .rationale,.ea{ color:var(--muted); font-size:12.5px; margin-top:3px; }
+  .ea-l{ display:inline-block; min-width:34px; color:var(--muted); margin-right:4px; }
+  .ea-bad{ color:var(--bad); }
+  .badge{ font-size:12px; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .zone-gating{ background:var(--info-bg); color:var(--info); }
+  .zone-advisory{ background:#ede9fe; color:var(--advisory); }
+  .st{ white-space:nowrap; }
+  .st .dot{ display:inline-block; width:8px; height:8px; border-radius:50%;
+    margin-right:6px; vertical-align:middle; }
+  .st-fail .dot{ background:var(--bad); } .st-warning .dot{ background:var(--warn); }
+  .st-pass .dot{ background:var(--ok); } .st-info .dot{ background:var(--info); }
+  .st-skipped .dot{ background:var(--muted); }
+  .hidden{ display:none !important; }
+  .reload{ float:right; font-size:12px; color:var(--muted); cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>dataval 報告檢視器</h1>
+  <div class="sub">讀取 <span class="mono">*.report.json</span>，分閘門區／顧問區呈現。
+    合規判定只由閘門區決定。<span class="reload hidden" id="reload">↻ 換一份報告</span></div>
+
+  <!-- empty state -->
+  <div id="drop">
+    <h2>拖進一份報告，或選檔</h2>
+    <p>接受 dataval 產生的 <span class="mono">reports/&lt;名&gt;.report.json</span></p>
+    <input type="file" id="file" accept="application/json,.json" class="hidden">
+    <button class="btn" onclick="document.getElementById('file').click()">選擇 JSON 檔</button>
+    <p style="margin-top:14px">也可用網址參數載入：<span class="mono">?src=reports/order.report.json</span>（需以 http 伺服器開啟）</p>
+    <div class="err hidden" id="err"></div>
+  </div>
+
+  <!-- report render target -->
+  <div id="app" class="hidden"></div>
+</div>
+
+<script>
+"use strict";
+
+const CATS = {
+  structural: "結構", naming: "命名", best_practice: "最佳實踐",
+  ssot: "SSOT", lineage: "血緣", concept: "概念",
+};
+const STATUS_LABEL = { fail:"失敗", warning:"警告", pass:"通過", info:"資訊", skipped:"略過" };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+
+// ---- public API: other projects call these ----
+window.dataval = {
+  render: renderReport,               // render(reportJsonObject, sourceName?)
+  loadUrl: url => fetch(url).then(r => r.json()).then(j => renderReport(j, url)),
+};
+// embedding: parent can postMessage({type:'dataval-report', report:{...}})
+window.addEventListener("message", e => {
+  const d = e.data;
+  if (d && d.type === "dataval-report" && d.report) renderReport(d.report);
+});
+
+function fail(msg){
+  const el = document.getElementById("err");
+  el.textContent = "讀取失敗：" + msg;
+  el.classList.remove("hidden");
+}
+
+function renderReport(report, sourceName){
+  if (!report || typeof report !== "object" || !report.summary){
+    return fail("這不是 dataval 報告 JSON（缺 summary）。");
+  }
+  const s = report.summary, meta = report.meta || {};
+  const findings = report.findings || [];
+  const ok = !!s.compliant;
+  // subject isn't always inside the JSON (input-based subjects have empty
+  // case_config); fall back to the loaded filename, then a generic label.
+  const fromFile = sourceName
+    ? String(sourceName).split("/").pop().replace(/\.report\.json$/i,"").replace(/\.json$/i,"")
+    : "";
+  const subject = meta.subject || meta.name ||
+    (meta.case_config ? String(meta.case_config).split("/").pop().replace(/\.ya?ml$/,"") : "") ||
+    fromFile || "報告";
+  const domains = (meta.domains_loaded || []).join("、") || "—";
+
+  const kpi = (n,l,cls="") => `<div class="kpi ${cls}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+
+  // blocking summary
+  let blkHtml = "";
+  const blocked = (report.blocking_summary && report.blocking_summary.blocked) || [];
+  if (blocked.length){
+    blkHtml = `<div class="blk"><h3>會擋的規則（${blocked.length}）</h3><ul>` +
+      blocked.map(b => `<li><span class="rule">${esc(b.rule)}</span> — ${esc(b.reason||b.title||"")}` +
+        (b.targets && b.targets.length ? `<br><span class="src">對象：${esc(b.targets.join("、"))}</span>` : "") +
+        `</li>`).join("") + `</ul></div>`;
+  }
+
+  // findings grouped by category
+  const cats = {};
+  for (const f of findings){ (cats[f.category] ||= []).push(f); }
+  const order = ["structural","naming","best_practice","ssot","lineage","concept"];
+  const catKeys = Object.keys(cats).sort((a,b)=>{
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia<0?99:ia) - (ib<0?99:ib);
+  });
+  const rank = st => ["fail","warning","skipped","info","pass"].indexOf(st);
+  let catsHtml = "";
+  for (const c of catKeys){
+    const list = cats[c].slice().sort((a,b)=>rank(a.status)-rank(b.status));
+    const nf = list.filter(f=>f.status==="fail").length;
+    const nw = list.filter(f=>f.status==="warning").length;
+    const rows = list.map(f=>{
+      const zone = f.zone === "advisory" ? "顧問" : "閘門";
+      let ea = "";
+      if (f.expected || f.actual)
+        ea += `<div class="ea"><span class="ea-l">期望</span>${esc(f.expected)}` +
+              `<span class="ea-l">實際</span><span class="ea-bad">${esc(f.actual)}</span></div>`;
+      if (f.fix) ea += `<div class="ea"><span class="ea-l">修法</span>${esc(f.fix)}</div>`;
+      const rat = f.rationale ? `<div class="rationale">理由：${esc(f.rationale)}</div>` : "";
+      const hay = esc(((f.check_id||"")+" "+(f.target||"")+" "+(f.message||"")+" "+(f.rationale||"")).toLowerCase());
+      return `<tr class="row" data-status="${esc(f.status)}" data-zone="${esc(f.zone)}" data-text="${hay}">` +
+        `<td class="st st-${esc(f.status)}"><span class="dot"></span>${esc(STATUS_LABEL[f.status]||f.status)}</td>` +
+        `<td><span class="badge zone-${esc(f.zone)}">${zone}</span></td>` +
+        `<td class="mono">${esc(f.check_id)}</td>` +
+        `<td class="mono">${esc(f.target)}</td>` +
+        `<td>${esc(f.message)}${ea}${rat}</td>` +
+        `<td class="src">${esc(f.source)}</td></tr>`;
+    }).join("");
+    catsHtml += `<section class="cat" data-cat="${esc(c)}">` +
+      `<button class="cat-head" onclick="this.parentNode.classList.toggle('collapsed')">` +
+      `<span class="chev">▾</span><span class="cat-title">${esc(CATS[c]||c)}</span>` +
+      `<span class="cat-meta">${list.length} 項${nf?` · ${nf} 失敗`:""}${nw?` · ${nw} 警告`:""}</span></button>` +
+      `<div class="cat-body"><table><thead><tr><th>狀態</th><th>區</th><th>檢查</th>` +
+      `<th>對象</th><th>說明</th><th>來源</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  }
+
+  document.getElementById("app").innerHTML = `
+    <div class="verdict ${ok?"ok":"bad"}">${ok?"✅ 合規":"❌ 不合規"}</div>
+    <div class="cards">
+      ${kpi(s.total ?? findings.length, "檢查總數")}
+      ${kpi(s.fail ?? 0, "失敗", s.fail?"bad":"")}
+      ${kpi(s.warning ?? 0, "警告", s.warning?"warn":"")}
+      ${kpi(s.pass ?? 0, "通過", "ok")}
+      ${kpi(s.advisory ?? 0, "顧問建議")}
+      ${kpi(s.skipped ?? 0, "略過")}
+    </div>
+    <div class="meta"><b>${esc(subject)}</b> ｜ domain：${esc(domains)}` +
+      (report.generated_at ? ` ｜ 產生時間：${esc(report.generated_at)}` : "") + `</div>
+    ${blkHtml}
+    <div class="controls">
+      <input type="search" id="q" placeholder="搜尋 check_id／對象／說明…" oninput="applyFilter()">
+      <span class="chip active" data-f="all" onclick="pick(this)">全部</span>
+      <span class="chip" data-f="fail" onclick="pick(this)">只看失敗</span>
+      <span class="chip" data-f="warning" onclick="pick(this)">只看警告</span>
+      <span class="chip" data-f="gating" onclick="pick(this)">閘門區</span>
+      <span class="chip" data-f="advisory" onclick="pick(this)">顧問區</span>
+    </div>
+    ${catsHtml}`;
+
+  document.getElementById("drop").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("reload").classList.remove("hidden");
+  document.title = `${subject} — ${ok?"合規":"不合規"} — dataval`;
+}
+
+let curFilter = "all";
+function pick(el){
+  document.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+  el.classList.add("active"); curFilter = el.dataset.f; applyFilter();
+}
+function applyFilter(){
+  const q = (document.getElementById("q")?.value || "").toLowerCase().trim();
+  document.querySelectorAll(".cat").forEach(cat=>{
+    let shown = 0;
+    cat.querySelectorAll(".row").forEach(r=>{
+      let ok = true;
+      if (curFilter==="fail") ok = r.dataset.status==="fail";
+      else if (curFilter==="warning") ok = r.dataset.status==="warning";
+      else if (curFilter==="gating") ok = r.dataset.zone==="gating";
+      else if (curFilter==="advisory") ok = r.dataset.zone==="advisory";
+      if (ok && q) ok = r.dataset.text.includes(q);
+      r.classList.toggle("hidden", !ok);
+      if (ok) shown++;
+    });
+    cat.classList.toggle("hidden", shown===0);
+  });
+}
+
+// ---- local file loading (works from file://, no server needed) ----
+function readFile(file){
+  const rd = new FileReader();
+  rd.onload = () => { try { renderReport(JSON.parse(rd.result), file.name); }
+    catch(e){ fail(e.message); } };
+  rd.readAsText(file);
+}
+document.getElementById("file").addEventListener("change", e => {
+  if (e.target.files[0]) readFile(e.target.files[0]);
+});
+const drop = document.getElementById("drop");
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e=>{
+  e.preventDefault(); drop.classList.add("hot"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e=>{
+  e.preventDefault(); drop.classList.remove("hot"); }));
+drop.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f) readFile(f);
+});
+document.getElementById("reload").addEventListener("click", () => {
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("drop").classList.remove("hidden");
+  document.getElementById("reload").classList.add("hidden");
+  document.getElementById("err").classList.add("hidden");
+});
+
+// ---- ?src=<url> auto-load (needs http server due to fetch/file:// rules) ----
+const src = new URLSearchParams(location.search).get("src");
+if (src){
+  fetch(src).then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.json(); })
+    .then(j => renderReport(j, src)).catch(e => fail(e.message + "（?src 需以 http 伺服器開啟，見 README）"));
+}
+</script>
+</body>
+</html>

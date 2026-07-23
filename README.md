@@ -289,4 +289,13 @@ reports/                報告輸出
 rules_history/          規則版控（自動維護）
 drafts/                 規則起草暫存與紀錄
 tests/                  守門測試
+.claude/skills/
+  ingest-reference/     Claude Code skill：把舊參考資料（ERD／flow／命名慣例／
+                        best practice／截圖）轉成上述結構化格式，或導向
+                        rules.py draft/adopt 流程；不可繞過規則人審與正式區晉升
+    SKILL.md            精簡路由：分類決策表＋治理邊界（每次載入）
+    references/         各格式的完整 grammar 與驗證，依分類結果按需載入
+frontend/               報告檢視器（讀 reports/*.report.json，可嵌入其他專案）
+  index.html            單檔、零依賴、雙擊即開的 viewer
+  README.md             整合契約（JSON schema 與三種載入方式）
 ```

@@ -192,11 +192,16 @@ def _suggest(schema: Schema, er_diagram: dict | None = None
 
 
 def _production_catalog(production_root: str, domains: list[str],
-                        dialect: str) -> dict[tuple[str, str], Table]:
-    """Load selected production tables; parse errors are reported upstream."""
+                        dialect: str
+                        ) -> tuple[dict[tuple[str, str], Table], list[Finding]]:
+    """Load selected production tables. A DDL that fails to parse is left out
+    of the catalog (so it can't be matched as a cross-domain lineage
+    endpoint) and reported back as a PRODUCTION.CATALOG_PARSE warning rather
+    than silently dropped."""
     catalog: dict[tuple[str, str], Table] = {}
+    problems: list[Finding] = []
     if not production_root or not os.path.isdir(production_root):
-        return catalog
+        return catalog, problems
     available = {
         name.lower(): name for name in os.listdir(production_root)
         if os.path.isdir(os.path.join(production_root, name))
@@ -215,11 +220,18 @@ def _production_catalog(production_root: str, domains: list[str],
             try:
                 with open(path, encoding="utf-8") as file:
                     parsed = parse_ddl(file.read(), dialect=dialect)
-            except Exception:
+            except Exception as e:
+                rel_path = os.path.relpath(path, production_root)
+                problems.append(Finding(
+                    "PRODUCTION.CATALOG_PARSE", "lineage", "warning", rel_path,
+                    f"正式區 DDL 無法解析，已從跨 domain lineage 目錄略過："
+                    f"{type(e).__name__}: {e}",
+                    severity="warning", source="rule", zone=ZONE_GATING,
+                    fix="修正該 DDL 語法，或跑 production_audit.py 確認是否為過期檔案。"))
                 continue
             for table in parsed.tables:
                 catalog[(domain.lower(), table.name)] = table
-    return catalog
+    return catalog, problems
 
 
 def _has_cycle(edges: list[tuple[str, str]]) -> bool:
@@ -265,8 +277,9 @@ def run(schema: Schema, lineage_spec: dict | None,
     selected = [domain for domain in (domains_loaded or [])
                 if domain.lower() != COMMON_DOMAIN.lower()]
     selected_by_lower = {domain.lower(): domain for domain in selected}
-    catalog = _production_catalog(production_root, selected, dialect)
-    findings: list[Finding] = []
+    catalog, catalog_problems = _production_catalog(
+        production_root, selected, dialect)
+    findings: list[Finding] = list(catalog_problems)
     relationships: list[dict] = []
     local_edges: list[tuple[str, str]] = []
     metadata_valid = True
