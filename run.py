@@ -29,6 +29,7 @@ from dataval.er_diagram import parse_mermaid
 from dataval.parser import parse_ddl
 from dataval.model import Finding, ZONE_ADVISORY, ZONE_GATING
 from dataval import precheck as preflight
+from dataval import report_paths
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR = os.environ.get("DATAVAL_INPUT_DIR", os.path.join(HERE, "input"))
@@ -474,9 +475,14 @@ def main():
             config_dir=CONFIG_DIR, production_root=PRODUCTION_ROOT)
         meta["case_config"] = case.config_source
 
-        md_path = os.path.join(REPORT_DIR, name + ".report.md")
-        js_path = os.path.join(REPORT_DIR, name + ".report.json")
-        html_path = os.path.join(REPORT_DIR, name + ".report.html")
+        # 依代表性 domain 把報告分類到 reports/<域>/。此時 domains 已知
+        # （驗證已回傳 meta），所以三式報告、advisory_prompt、subject_summary
+        # 都放進分類資料夾；precheck.md 例外——它可能在完全不知道 domain 時就
+        # 失敗，故維持扁平放在 reports/ 根（見上方 precheck 寫檔）。
+        out_dir = report_paths.report_dir_for(REPORT_DIR, meta.get("domains_loaded"))
+        md_path = os.path.join(out_dir, name + ".report.md")
+        js_path = os.path.join(out_dir, name + ".report.json")
+        html_path = os.path.join(out_dir, name + ".report.html")
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(to_markdown(findings, meta))
         with open(js_path, "w", encoding="utf-8") as f:
@@ -495,7 +501,7 @@ def main():
                                            name=name, pending_skills=pending,
                                            unregistered_candidates=meta.get(
                                                "unregistered_candidates", []))
-            with open(os.path.join(REPORT_DIR, name + ".advisory_prompt.md"),
+            with open(os.path.join(out_dir, name + ".advisory_prompt.md"),
                       "w", encoding="utf-8") as f:
                 f.write(prompt)
 
@@ -512,12 +518,13 @@ def main():
         # 放到 reports/<名>.subject_summary.md，作為放入 production 前的說明文件。
         summary_md = build_summary(schema, meta.get("domains_loaded"),
                                    s["compliant"], llm)
-        with open(os.path.join(REPORT_DIR, name + ".subject_summary.md"),
+        with open(os.path.join(out_dir, name + ".subject_summary.md"),
                   "w", encoding="utf-8") as f:
             f.write(summary_md)
 
+        html_label = os.path.relpath(html_path, HERE)
         print(f"  {name}: {flag} ｜ domain: {dom_str} → "
-              f"{report_dir_label}/{name}.report.html"
+              f"{html_label}"
               f"（＋摘要 {name}.subject_summary.md）")
 
     print(f"完成。報告在 {report_dir_label}/ 資料夾。")

@@ -3,6 +3,7 @@
 
     python rules.py new <rule_id>            # 最簡單：新增 Common/gating 規則
     python rules.py new <domain> <gating|advisory> <rule_id>   # 進階：指定位置
+    python rules.py new-domain <NAME>        # 建立新 domain 的資料夾骨架（不含規則）
     python rules.py check                    # lint 並 compile（新增後跑這個）
     python rules.py list                     # 盤點目前載入的所有規則
     python rules.py lint                     # 只檢查規則檔語法
@@ -72,6 +73,92 @@ def cmd_new(domain: str, zone: str, rule_id: str):
     print(f"1. 編輯 {rel}")
     print("2. 執行 python rules.py check")
     print("3. 執行 python run.py，在報告查看 SKILL." + rule_id)
+
+
+def _write_if_absent(path: str, content: str,
+                     created: list[str], skipped: list[str]):
+    """只在檔案不存在時建立，避免覆蓋既有內容。"""
+    if os.path.exists(path):
+        skipped.append(os.path.relpath(path, HERE))
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    created.append(os.path.relpath(path, HERE))
+
+
+def cmd_new_domain(name: str):
+    """建立新 domain 的資料夾骨架，符合 domains_layout_test 的佈局契約。
+
+    只搭骨架（naming／erd／flows／ssot／knowhow 空目錄），不含任何治理規則——
+    規則仍須用 `rules.py draft`/`rules.py new` 手動撰寫並人審。
+    """
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+        sys.exit("domain 名只能包含英數、底線或連字號，且須以字母開頭")
+    if name.startswith("_"):
+        sys.exit("domain 名不可用 _ 開頭（保留給引擎層）")
+    lower = name.lower()
+    base = os.path.join(DOMAIN_ROOT, name)
+    created: list[str] = []
+    skipped: list[str] = []
+
+    glossary = (
+        f"# {name} 領域詞彙字典（business glossary）— naming 字典卡控的依據。\n"
+        "# 與 Common 合併載入：此處條目會疊加／覆蓋 Common 基底。\n"
+        "# 用 SKILL 的 require: term_in_glossary / no_banned_term 對照。\n\n"
+        "# 禁用詞 → 建議改用的標準詞（欄位名含左邊的詞就報違規）\n"
+        "banned_terms: {}\n\n"
+        "# 別名 → 正規詞（同義但非標準的寫法）\n"
+        "aliases: {}\n\n"
+        "# 本域標準詞白名單（允許出現、不視為違規）\n"
+        "standard_terms: []\n")
+    erd = (
+        f"%% {name} 領域核心參考模型（骨架，請替換為實際實體與關聯）\n"
+        "erDiagram\n"
+        f'    %% 範例：customer ||--o{{ order : "一位客戶有多筆訂單"\n')
+    flow = (
+        f"# {name} 領域流程範例（依實際端到端流程替換本檔）\n"
+        f"flow: {lower}_sample\n"
+        f"title: {name} 範例流程\n"
+        "description: 依實際端到端流程替換本檔\n"
+        "stages:\n"
+        "  - name: 來源系統\n"
+        "    kind: source\n"
+        f"  - name: {lower}_master\n"
+        "    kind: table\n"
+        "  - name: 消費端報表\n"
+        "    kind: report\n")
+    ssot = (
+        f"# {name} 域 SSOT registry（範例範本）。與 Common 合併載入：此處的\n"
+        "# registry / attribute_owner 條目會疊加／覆蓋 Common。\n"
+        "registry: {}         # 例  supplier: {authoritative_table: dim_supplier, key: supplier_no}\n"
+        "attribute_owner: {}  # 例  supplier_name: dim_supplier\n")
+
+    _write_if_absent(os.path.join(base, "knowhow", "gating", ".gitkeep"),
+                     "", created, skipped)
+    _write_if_absent(os.path.join(base, "knowhow", "advisory", ".gitkeep"),
+                     "", created, skipped)
+    _write_if_absent(os.path.join(base, "naming", "glossary.yaml"),
+                     glossary, created, skipped)
+    _write_if_absent(os.path.join(base, "erd", f"{lower}_core.mmd"),
+                     erd, created, skipped)
+    _write_if_absent(os.path.join(base, "flows", "_sample.flow.yaml"),
+                     flow, created, skipped)
+    _write_if_absent(os.path.join(base, "ssot", "registry.yaml"),
+                     ssot, created, skipped)
+
+    if created:
+        print(f"✅ 已建立 domain 骨架 config/{name}/：")
+        for rel in created:
+            print(f"   + {rel}")
+    if skipped:
+        print("已存在、未覆蓋：")
+        for rel in skipped:
+            print(f"   = {rel}")
+    print("\n這只是資料夾骨架，尚無任何治理規則。實際規則仍需手動撰寫：")
+    print(f"   python rules.py new {name} gating <rule_id>        # 新增確定性規則")
+    print(f"   python rules.py draft {name} advisory <rule_id> \"<需求>\"  # 由 LLM 起草後人審")
+    print("詞彙／SSOT／ERD／flows 內容也請依實際領域知識替換範本佔位。")
 
 
 def _rule_regexes(sk):
@@ -270,6 +357,8 @@ if __name__ == "__main__":
         cmd_check()
     elif len(sys.argv) >= 2 and sys.argv[1] == "list":
         cmd_list()
+    elif len(sys.argv) == 3 and sys.argv[1] == "new-domain":
+        cmd_new_domain(sys.argv[2])
     elif len(sys.argv) == 3 and sys.argv[1] == "new":
         cmd_new(COMMON_DOMAIN, "gating", sys.argv[2])
     elif len(sys.argv) == 5 and sys.argv[1] == "new":

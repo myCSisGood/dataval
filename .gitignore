@@ -11,8 +11,10 @@ htmlcov/
 .env.*
 !.env.example
 
-reports/*.report.html
-reports/*.advisory_result.json
-reports/*.advisory_prompt.md
-reports/*.subject_summary.md
+# 報告產物（html／prompt／summary／agent 結果）不進版控；分類到 reports/<域>/ 後
+# 用 **/ 讓子資料夾也一併忽略。.report.json／.report.md／.precheck.md 仍入庫。
+reports/**/*.report.html
+reports/**/*.advisory_result.json
+reports/**/*.advisory_prompt.md
+reports/**/*.subject_summary.md
 examples/lineage/reports/

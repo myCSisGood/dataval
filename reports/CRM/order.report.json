@@ -1475,7 +1475,7 @@
     ],
     "note": "確定性檢查，決定合規判定；結果以 checking rule ID 呈現"
   },
-  "generated_at": "2026-07-22T11:37:36.443867Z",
+  "generated_at": "2026-07-25T09:06:54.351888Z",
   "lineage": {
     "note": "關係來自 case config 的 lineage，並參照 ER diagram；兩者都是設計宣告，不代表已觀測到 runtime lineage。",
     "relationships": [

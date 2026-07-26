@@ -26,12 +26,18 @@ domain 的 `production/`；沒有 YAML 時只能把推測稱為建議，不能�
 ## 補完顧問區
 
 未設定本地 LLM 時，`run.py` 仍會產生 Markdown、JSON、HTML 與
-`reports/<名稱>.advisory_prompt.md`；HTML 會清楚標示語意規則待補完。需要補完時 Agent 應：
+`advisory_prompt.md`；HTML 會清楚標示語意規則待補完。報告依代表性 domain 分類到
+`reports/<域>/`（`advisory_prompt.md` 同在此資料夾）。需要補完時 Agent 應：
 
-1. 讀取 `advisory_prompt.md`。
-2. 依其中格式產生 `reports/<名稱>.advisory_result.json`。
+1. 讀取 `reports/<域>/<名稱>.advisory_prompt.md`。
+2. 依其中格式產生 `advisory_result.json`，放在**與 prompt 同一個資料夾**
+   （`reports/<域>/<名稱>.advisory_result.json`；放在 `reports/` 根也相容）。
 3. 執行 `.venv/bin/python merge_advisory.py`。
 4. 確認更新後的 `.report.html`，閘門結果必須不變。
+
+**完整的 JSON 格式與驗證規則已內嵌在生成的 `advisory_prompt.md` 裡**（欄位、
+非空字串、skill id 樣式等逐條列出），照它做即可，不必另外查
+`config/_engine/advisory_result.schema.json` 或本檔——本檔只講流程，格式以 prompt 為準。
 
 顧問建議一律是 `info`，永遠不能改變合規判定。合併程式會逐項比較合併前後的
 gating findings，不一致就拒絕寫入。

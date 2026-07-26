@@ -100,6 +100,41 @@ def blocking_summary(findings: list[Finding]) -> dict:
     }
 
 
+def diff_findings(old: dict, new: dict) -> dict:
+    """比對兩份 report 的 findings，回傳 {added, removed, changed}。
+
+    key = (check_id, target)；changed 逐項記錄 status/message 的 from→to。
+    只讀 findings，因此 generated_at 等時間戳天生被忽略（不算差異）。
+    比對模式沿用 rules_history.diff_rules，只是換 key 與比較欄位。
+    """
+    def index(payload: dict | None) -> dict:
+        out: dict = {}
+        for f in (payload or {}).get("findings", []) or []:
+            out[(f.get("check_id"), f.get("target"))] = f
+        return out
+
+    def brief(f: dict) -> dict:
+        return {"check_id": f.get("check_id"), "target": f.get("target"),
+                "status": f.get("status"), "zone": f.get("zone"),
+                "message": f.get("message")}
+
+    old_i, new_i = index(old), index(new)
+    key = lambda k: (str(k[0]), str(k[1]))
+    added = [brief(new_i[k]) for k in sorted(new_i, key=key) if k not in old_i]
+    removed = [brief(old_i[k]) for k in sorted(old_i, key=key) if k not in new_i]
+    changed = []
+    for k in sorted(set(old_i) & set(new_i), key=key):
+        before, after = old_i[k], new_i[k]
+        fields = {}
+        for field in ("status", "message"):
+            if before.get(field) != after.get(field):
+                fields[field] = {"from": before.get(field), "to": after.get(field)}
+        if fields:
+            changed.append({"check_id": k[0], "target": k[1],
+                            "zone": after.get("zone"), "fields": fields})
+    return {"added": added, "removed": removed, "changed": changed}
+
+
 def to_json(findings: list[Finding], meta: dict | None = None,
             deterministic: bool = False) -> str:
     gating = [f.to_dict() for f in findings if f.zone == ZONE_GATING]

@@ -34,6 +34,7 @@ import yaml
 
 from dataval.precheck import parse_context, locate_pieces
 from dataval.prodgraph import current_rule_code
+from dataval import report_paths
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR = os.environ.get("DATAVAL_INPUT_DIR", os.path.join(HERE, "input"))
@@ -87,9 +88,10 @@ def main():
             fail(f"缺 {os.path.relpath(path, HERE)}；四件輸入契約見 input/README.md")
 
     # ── ② 最新報告必須合規 ─────────────────────────────
-    report_path = os.path.join(REPORT_DIR, f"{name}.report.json")
-    if not os.path.isfile(report_path):
-        fail(f"找不到 {os.path.relpath(report_path, HERE)}；請先跑 python run.py")
+    # 報告可能已依 domain 分類到 reports/<域>/，用 helper 定位（相容扁平舊路徑）。
+    report_path = report_paths.find_report_json(REPORT_DIR, name)
+    if report_path is None:
+        fail(f"找不到 {name}.report.json（reports/ 或其分類子夾）；請先跑 python run.py")
     with open(report_path, encoding="utf-8") as f:
         report = json.load(f)
     if not report.get("summary", {}).get("compliant"):

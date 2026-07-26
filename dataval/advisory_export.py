@@ -45,7 +45,14 @@ Python 端沒有 LLM 連線，以下顧問區項目需要你用你的 LLM 完成
   }}
 }}
 ```
-此檔案必須符合 `config/advisory_result.schema.json`；合併前會強制驗證。
+此檔案必須符合 `config/_engine/advisory_result.schema.json`；合併前會強制驗證。
+驗證規則（合併程式實際檢查的內容，照這裡寫就會通過）：
+- 最外層是 JSON object，**剛好**只有這三個 key：`naming_semantic`、`concept`、`skills`，不多不少。
+- `naming_semantic` 與 `concept` 各是一個 array；`skills` 是一個 object。
+- `skills` 的每個 key（skill id）必須符合 `^[a-z][a-z0-9_]*$`（小寫字母開頭，只含小寫字母／數字／底線）。
+- 每一筆建議物件的欄位**剛好**是 `target`、`message`、`rationale` 三個，不多不少。
+- 這三個欄位都必須是**非空字串**（不可是 null、數字、空字串或只有空白）。
+- 沒有建議時給空 array（`[]`）／空 object（`{{}}`）即可，不要省略 key。
 
 3. 跑一次合併，把建議填進報告與 HTML：
 ```
@@ -98,6 +105,11 @@ def build_advisory_prompt(schema: Schema, context: str,
         schema_json=json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+# 權威來源：這裡的規則同時存在於三處，改一處必須同步另外兩處，否則會漂移：
+#   1. 本函式（合併程式實際執行的驗證）
+#   2. _INSTRUCTIONS 內嵌的「驗證規則」條列（給 agent 看的說明）
+#   3. config/_engine/advisory_result.schema.json（JSON Schema 形式，供外部工具參照）
+# 目前只有本函式會被程式讀取；schema 檔與 prompt 文字都只是說明用。
 def validate_advisory_result(result) -> list[str]:
     """Validate the advisory payload against advisory_result.schema.json semantics.
 

@@ -23,6 +23,7 @@ from dataval.advisory_export import build_advisory_prompt, validate_advisory_res
 from merge_advisory import _gating_from_findings, _gating_from_report
 from rules import lint_rules
 import run as batch_run
+from dataval import report_paths
 
 
 CFG = os.path.join(ROOT, "config", "_engine", "default.yaml")
@@ -344,7 +345,10 @@ class ArchitectureTest(unittest.TestCase):
             result = subprocess.run(
                 [sys.executable, os.path.join(ROOT, "run.py"), "--strict"],
                 cwd=ROOT, env=env, text=True, capture_output=True, check=False)
-            html_path = os.path.join(report_dir, "subscription.report.html")
+            # 報告已依 domain 分類到 reports/<域>/；用 helper 定位 json 後推 html。
+            json_path = report_paths.find_report_json(report_dir, "subscription")
+            self.assertIsNotNone(json_path, "找不到 subscription.report.json")
+            html_path = json_path[: -len(".json")] + ".html"
             self.assertTrue(os.path.isfile(html_path))
             with open(html_path, encoding="utf-8") as f:
                 html = f.read()
@@ -368,8 +372,9 @@ class ArchitectureTest(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
             def report(name):
-                with open(os.path.join(report_dir, name + ".report.json"),
-                          encoding="utf-8") as f:
+                path = report_paths.find_report_json(report_dir, name)
+                self.assertIsNotNone(path, f"找不到 {name}.report.json")
+                with open(path, encoding="utf-8") as f:
                     return json.load(f)
 
             valid = report("01_declared_valid")

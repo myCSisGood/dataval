@@ -21,8 +21,19 @@ from dataval.report import to_json, to_markdown, to_html, summarize
 from dataval.model import Finding, ZONE_ADVISORY
 from dataval.llm import NullLLM
 from dataval.advisory_export import validate_advisory_result
+from dataval import report_paths
 
 import run as R  # reuse paths + the single DDL/case-config loader
+
+
+def _locate_result(report_dir: str, name: str) -> str | None:
+    """定位 agent 產生的 advisory_result.json：先找報告所在的分類子夾，
+    再退回 reports/ 根（相容舊工作流程 agent 直接寫在扁平路徑）。"""
+    for base in (report_dir, R.REPORT_DIR):
+        candidate = os.path.join(base, name + ".advisory_result.json")
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 
 def _canonical_gating(items: list[dict]) -> list[str]:
@@ -72,8 +83,10 @@ def main():
     guard_failed = 0
     for ddl_path in ddls:
         name = os.path.splitext(os.path.basename(ddl_path))[0]
-        result_path = os.path.join(R.REPORT_DIR, name + ".advisory_result.json")
-        if not os.path.isfile(result_path):
+        report_path = report_paths.find_report_json(R.REPORT_DIR, name)
+        report_dir = os.path.dirname(report_path) if report_path else R.REPORT_DIR
+        result_path = _locate_result(report_dir, name)
+        if result_path is None:
             continue
         try:
             with open(result_path, encoding="utf-8") as f:
@@ -84,14 +97,17 @@ def main():
             continue
         schema_errors = validate_advisory_result(result)
         if schema_errors:
-            print(f"  {name}: advisory_result 不符合 config/advisory_result.schema.json")
+            print(f"  {name}: advisory_result 不符合 config/_engine/advisory_result.schema.json")
             for error in schema_errors:
                 print(f"    - {error}")
             guard_failed += 1
             continue
 
         case = R.load_input(ddl_path)
-        report_path = os.path.join(R.REPORT_DIR, name + ".report.json")
+        if report_path is None:
+            print(f"  {name}: 找不到既有 report.json，請先跑 python run.py，略過")
+            guard_failed += 1
+            continue
         try:
             previous_gating = _gating_from_report(report_path)
         except Exception as e:
@@ -137,11 +153,13 @@ def main():
             ".report.html": to_html(findings, meta),
         }
         for suffix, content in outputs.items():
-            with open(os.path.join(R.REPORT_DIR, name + suffix), "w",
+            with open(os.path.join(report_dir, name + suffix), "w",
                       encoding="utf-8") as f:
                 f.write(content)
         s = summarize(findings)
-        print(f"  {name}: 顧問區已補完（{s['advisory']} 項）→ reports/{name}.report.html")
+        html_rel = os.path.relpath(os.path.join(report_dir, name + ".report.html"),
+                                   R.HERE)
+        print(f"  {name}: 顧問區已補完（{s['advisory']} 項）→ {html_rel}")
         merged += 1
 
     if merged == 0 and guard_failed == 0:

@@ -91,6 +91,40 @@
   .st-skipped .dot{ background:var(--muted); }
   .hidden{ display:none !important; }
   .reload{ float:right; font-size:12px; color:var(--muted); cursor:pointer; }
+
+  /* tabs */
+  .tabs{ display:flex; gap:4px; margin:2px 0 14px; border-bottom:1px solid var(--line); }
+  .tab{ padding:8px 16px; background:none; border:none; border-bottom:2px solid transparent;
+    color:var(--muted); font-size:14px; cursor:pointer; }
+  .tab.active{ color:var(--ink); border-bottom-color:var(--accent); font-weight:600; }
+
+  /* lineage graph */
+  .graph-box{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin:12px 0; overflow-x:auto; }
+  .graph-box h3{ font-size:14px; margin:0 0 4px; }
+  .graph-hint{ color:var(--muted); font-size:12.5px; margin:0 0 8px; }
+  .g-node rect{ fill:var(--card); stroke:var(--line); stroke-width:1.5; }
+  .g-node text{ fill:var(--ink); font-size:12px; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .g-edge{ fill:none; stroke:var(--muted); stroke-width:1.5; opacity:.75; }
+  .g-edge.suggested{ stroke-dasharray:4 3; }
+  .g-arrow{ fill:var(--muted); }
+
+  /* submit form */
+  .field{ margin:10px 0; }
+  .field label{ display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .field textarea, .field input{ width:100%; padding:8px 10px; border:1px solid var(--line);
+    border-radius:8px; background:var(--card); color:var(--ink); font-size:13px;
+    font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .field textarea{ resize:vertical; }
+  .row-inline{ display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
+  .sample-row{ display:flex; gap:8px; margin:6px 0; align-items:flex-start; }
+  .sample-row .s-table{ width:150px; flex:none; }
+  .sample-row .s-csv{ flex:1; }
+  .btn-sm{ padding:5px 10px; border-radius:7px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:12.5px; cursor:pointer; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .banner{ background:var(--warn-bg); color:var(--warn); border-radius:9px;
+    padding:10px 14px; font-size:13px; margin:8px 0; }
 </style>
 </head>
 <body>
@@ -99,18 +133,64 @@
   <div class="sub">讀取 <span class="mono">*.report.json</span>，分閘門區／顧問區呈現。
     合規判定只由閘門區決定。<span class="reload hidden" id="reload">↻ 換一份報告</span></div>
 
-  <!-- empty state -->
-  <div id="drop">
-    <h2>拖進一份報告，或選檔</h2>
-    <p>接受 dataval 產生的 <span class="mono">reports/&lt;名&gt;.report.json</span></p>
-    <input type="file" id="file" accept="application/json,.json" class="hidden">
-    <button class="btn" onclick="document.getElementById('file').click()">選擇 JSON 檔</button>
-    <p style="margin-top:14px">也可用網址參數載入：<span class="mono">?src=reports/order.report.json</span>（需以 http 伺服器開啟）</p>
-    <div class="err hidden" id="err"></div>
+  <div class="tabs">
+    <button class="tab active" data-tab="report" onclick="showTab('report')">報告</button>
+    <button class="tab" data-tab="lineage" onclick="showTab('lineage')">Lineage</button>
+    <button class="tab" data-tab="submit" onclick="showTab('submit')">送驗</button>
   </div>
 
-  <!-- report render target -->
-  <div id="app" class="hidden"></div>
+  <!-- 報告分頁 -->
+  <div class="tabpane" id="pane-report">
+    <!-- empty state -->
+    <div id="drop">
+      <h2>拖進一份報告，或選檔</h2>
+      <p>接受 dataval 產生的 <span class="mono">reports/&lt;名&gt;.report.json</span></p>
+      <input type="file" id="file" accept="application/json,.json" class="hidden">
+      <button class="btn" onclick="document.getElementById('file').click()">選擇 JSON 檔</button>
+      <p style="margin-top:14px">也可用網址參數載入：<span class="mono">?src=reports/order.report.json</span>（需以 http 伺服器開啟）</p>
+      <div class="err hidden" id="err"></div>
+    </div>
+    <!-- report render target -->
+    <div id="app" class="hidden"></div>
+  </div>
+
+  <!-- Lineage 分頁 -->
+  <div class="tabpane hidden" id="pane-lineage">
+    <div class="graph-box">
+      <h3>本報告的 lineage（單一 subject）</h3>
+      <div class="graph-hint" id="subj-hint">先在「報告」分頁載入一份含 lineage 的報告。</div>
+      <div id="subj-graph"></div>
+    </div>
+    <div class="graph-box hidden" id="global-section">
+      <h3>全域正式區關聯圖</h3>
+      <div class="graph-hint" id="global-hint"></div>
+      <div id="global-graph"></div>
+    </div>
+  </div>
+
+  <!-- 送驗分頁 -->
+  <div class="tabpane hidden" id="pane-submit">
+    <div class="banner hidden" id="sub-offline">此分頁需要後端：請先跑
+      <span class="mono">.venv/bin/python webapp.py</span> 並用它開啟的網址存取。
+      離線仍可用「報告」分頁載入既有 report.json。</div>
+    <div class="field row-inline">
+      <div style="flex:1"><label>subject 名稱（＝資料夾／檔名）</label>
+        <input id="sub-name" list="sub-list" placeholder="例：order" oninput="checkSubmitReady()"></div>
+      <button class="btn-sm" onclick="loadExisting()">載入既有</button>
+      <datalist id="sub-list"></datalist>
+    </div>
+    <div class="field"><label>① DDL（<span class="mono">&lt;名&gt;.sql</span>）</label>
+      <textarea id="sub-ddl" rows="8" oninput="checkSubmitReady()" placeholder="CREATE TABLE …"></textarea></div>
+    <div class="field"><label>② 樣本（DDL 每張表一份 CSV，首列＝表頭）
+        <button class="btn-sm" style="float:right" onclick="addSampleRow()">＋ 新增表樣本</button></label>
+      <div id="sub-samples"></div></div>
+    <div class="field"><label>③ relations.yaml（單表可寫 <span class="mono">relations: []</span>）</label>
+      <textarea id="sub-rel" rows="5" oninput="checkSubmitReady()" placeholder="relations: []"></textarea></div>
+    <div class="field"><label>④ context.md（front-matter＋「粒度」段落必填）</label>
+      <textarea id="sub-ctx" rows="6" oninput="checkSubmitReady()" placeholder="---&#10;subject: …&#10;---&#10;&#10;## 粒度（每張表一行代表什麼）&#10;…"></textarea></div>
+    <button class="btn" id="sub-submit" disabled onclick="submitValidate()">送出驗證</button>
+    <div id="submit-result" style="margin-top:16px"></div>
+  </div>
 </div>
 
 <script>
@@ -145,6 +225,7 @@ function renderReport(report, sourceName){
   if (!report || typeof report !== "object" || !report.summary){
     return fail("這不是 dataval 報告 JSON（缺 summary）。");
   }
+  currentReport = report;
   const s = report.summary, meta = report.meta || {};
   const findings = report.findings || [];
   const ok = !!s.compliant;
@@ -236,6 +317,270 @@ function renderReport(report, sourceName){
   document.getElementById("app").classList.remove("hidden");
   document.getElementById("reload").classList.remove("hidden");
   document.title = `${subject} — ${ok?"合規":"不合規"} — dataval`;
+  renderSubjectLineage();
+}
+
+// ---- tabs + lineage visualization (zero dependencies, inline SVG) ----
+let currentReport = null;
+let globalLoaded = false;
+
+function showTab(name){
+  document.querySelectorAll(".tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.tab === name));
+  document.querySelectorAll(".tabpane").forEach(p =>
+    p.classList.toggle("hidden", p.id !== "pane-" + name));
+  if (name === "lineage"){ renderSubjectLineage(); loadGlobalGraph(); }
+  if (name === "submit"){ initSubmitTab(); }
+}
+
+// Longest-path layering; the loop caps at |nodes| iterations so cycles終止.
+function layerize(ids, edges){
+  const depth = {}; ids.forEach(i => depth[i] = 0);
+  for (let k = 0; k < ids.length; k++){
+    let changed = false;
+    for (const e of edges){
+      if (depth[e.from] == null || depth[e.to] == null) continue;
+      if (depth[e.to] < depth[e.from] + 1){ depth[e.to] = depth[e.from] + 1; changed = true; }
+    }
+    if (!changed) break;
+  }
+  return depth;
+}
+
+// nodes: [{id, label?, sub?, color?}]  edges: [{from, to, suggested?}]
+function drawGraph(nodes, edges){
+  if (!nodes.length) return "";
+  const NW = 150, NH = 34, COL = 190, ROW = 60, MX = 16, MY = 16;
+  const ids = nodes.map(n => n.id), idset = new Set(ids);
+  edges = edges.filter(e => idset.has(e.from) && idset.has(e.to));
+  const depth = layerize(ids, edges), layers = {};
+  nodes.forEach(n => (layers[depth[n.id]] ||= []).push(n));
+  const pos = {}; let maxRow = 0, maxCol = 0;
+  Object.keys(layers).map(Number).sort((a,b) => a - b).forEach(d => {
+    layers[d].forEach((n,i) => {
+      pos[n.id] = { x: MX + d*COL, y: MY + i*ROW };
+      maxRow = Math.max(maxRow, i); maxCol = Math.max(maxCol, d);
+    });
+  });
+  const W = MX*2 + maxCol*COL + NW, H = MY*2 + maxRow*ROW + NH;
+  const edgeSvg = edges.map(e => {
+    const a = pos[e.from], b = pos[e.to];
+    const x1 = a.x + NW, y1 = a.y + NH/2, x2 = b.x, y2 = b.y + NH/2, mx = (x1+x2)/2;
+    return `<path class="g-edge${e.suggested ? " suggested" : ""}" marker-end="url(#arr)" `+
+      `d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
+  }).join("");
+  const nodeSvg = nodes.map(n => {
+    const p = pos[n.id], label = n.label || n.id;
+    const short = label.length > 20 ? label.slice(0,19) + "…" : label;
+    const stroke = n.color ? ` style="stroke:${esc(n.color)}"` : "";
+    const tip = n.sub ? `${label} · ${n.sub}` : label;
+    return `<g class="g-node"><title>${esc(tip)}</title>`+
+      `<rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="7"${stroke}/>`+
+      `<text x="${p.x+NW/2}" y="${p.y+NH/2+4}" text-anchor="middle">${esc(short)}</text></g>`;
+  }).join("");
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`+
+    `<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" `+
+    `orient="auto" markerUnits="userSpaceOnUse">`+
+    `<path class="g-arrow" d="M0,0 L9,3 L0,6 Z"/></marker></defs>${edgeSvg}${nodeSvg}</svg>`;
+}
+
+function renderSubjectLineage(){
+  const box = document.getElementById("subj-graph");
+  const hint = document.getElementById("subj-hint");
+  if (!box) return;
+  const rels = (currentReport && currentReport.lineage &&
+                currentReport.lineage.relationships) || [];
+  if (!currentReport){
+    hint.textContent = "先在「報告」分頁載入一份含 lineage 的報告。"; box.innerHTML = ""; return;
+  }
+  if (!rels.length){
+    hint.textContent = "本報告沒有 lineage 關聯資料。"; box.innerHTML = ""; return;
+  }
+  const norm = s => String(s || "").replace(/^local\./, "");
+  const nodeMap = {}, edges = [];
+  for (const r of rels){
+    const f = norm(r.source), t = norm(r.target);
+    nodeMap[f] ||= { id: f, label: f };
+    nodeMap[t] ||= { id: t, label: t };
+    edges.push({ from: f, to: t, suggested: r.kind && r.kind !== "declared" });
+  }
+  hint.textContent = `${rels.length} 條關聯（實線＝YAML 宣告，虛線＝系統／ER 建議）。箭頭：上游 → 下游。`;
+  box.innerHTML = drawGraph(Object.values(nodeMap), edges);
+}
+
+function domainColor(d){
+  const palette = ["#2563eb","#7c3aed","#15803d","#b45309","#b91c1c","#0891b2","#be185d"];
+  if (!d || d === "?") return "";
+  let h = 0; for (const ch of d) h = (h*31 + ch.charCodeAt(0)) >>> 0;
+  return palette[h % palette.length];
+}
+
+// Global production graph — only when a backend (webapp.py) is serving /api.
+function loadGlobalGraph(){
+  if (globalLoaded) return;
+  const sec = document.getElementById("global-section");
+  const hint = document.getElementById("global-hint");
+  const box = document.getElementById("global-graph");
+  if (!location.protocol.startsWith("http")){ sec.classList.add("hidden"); return; }
+  fetch("/api/lineage-graph")
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(g => {
+      globalLoaded = true;
+      const nodes = (g.nodes || []).map(n => ({
+        id: n.id, label: n.id,
+        sub: (n.domain || "") + (n.subject ? " · " + n.subject : ""),
+        color: domainColor(n.domain) }));
+      const edges = (g.edges || []).map(e => ({ from: e.from, to: e.to }));
+      sec.classList.remove("hidden");
+      if (!nodes.length){ hint.textContent = "正式區目前沒有可繪的關聯。"; box.innerHTML = ""; return; }
+      hint.textContent = `${nodes.length} 個表 · ${edges.length} 條關聯（節點色＝domain）。箭頭：上游 → 下游。`;
+      box.innerHTML = drawGraph(nodes, edges);
+    })
+    .catch(() => { sec.classList.add("hidden"); });  // 靜態檔案模式：隱藏全域圖
+}
+
+// ---- 送驗分頁（需要 webapp.py 後端；靜態檔案模式會提示） ----
+let submitInited = false;
+let submitFixes = [];
+
+function initSubmitTab(){
+  if (!document.querySelector("#sub-samples .sample-row")) addSampleRow();
+  if (submitInited) return;
+  const banner = document.getElementById("sub-offline");
+  if (!location.protocol.startsWith("http")){ banner.classList.remove("hidden"); return; }
+  fetch("/api/subjects").then(r => r.json()).then(d => {
+    submitInited = true;
+    banner.classList.add("hidden");
+    document.getElementById("sub-list").innerHTML =
+      (d.subjects || []).map(s => `<option value="${esc(s.name)}">`).join("");
+  }).catch(() => banner.classList.remove("hidden"));
+}
+
+function addSampleRow(table = "", csv = ""){
+  const wrap = document.getElementById("sub-samples");
+  const div = document.createElement("div");
+  div.className = "sample-row";
+  div.innerHTML =
+    `<input class="s-table" placeholder="表名" value="${esc(table)}">` +
+    `<textarea class="s-csv" rows="3" placeholder="CSV（首列＝表頭）"></textarea>` +
+    `<button class="btn-sm s-del">移除</button>`;
+  wrap.appendChild(div);
+  div.querySelector(".s-csv").value = csv;         // 用 value 設，避免 HTML 轉義問題
+  div.querySelector(".s-del").addEventListener("click", () => { div.remove(); checkSubmitReady(); });
+  div.querySelectorAll("input,textarea").forEach(el => el.addEventListener("input", checkSubmitReady));
+  checkSubmitReady();
+}
+
+function collectSamples(){
+  const out = {};
+  document.querySelectorAll("#sub-samples .sample-row").forEach(r => {
+    const t = r.querySelector(".s-table").value.trim();
+    const c = r.querySelector(".s-csv").value;
+    if (t) out[t] = c;
+  });
+  return out;
+}
+
+function checkSubmitReady(){
+  const val = id => (document.getElementById(id).value || "").trim();
+  const samples = collectSamples();
+  const hasSample = Object.values(samples).some(v => v.trim());
+  const ready = val("sub-name") && val("sub-ddl") && val("sub-rel") &&
+                val("sub-ctx") && hasSample;
+  document.getElementById("sub-submit").disabled = !ready;
+}
+
+function loadExisting(){
+  const name = document.getElementById("sub-name").value.trim();
+  if (!name) return;
+  fetch("/api/subject?name=" + encodeURIComponent(name))
+    .then(r => { if (!r.ok) throw new Error("not found"); return r.json(); })
+    .then(d => {
+      document.getElementById("sub-ddl").value = d.ddl || "";
+      document.getElementById("sub-rel").value = d.relations || "";
+      document.getElementById("sub-ctx").value = d.context || "";
+      const wrap = document.getElementById("sub-samples"); wrap.innerHTML = "";
+      const ks = Object.keys(d.samples || {});
+      if (ks.length) ks.forEach(t => addSampleRow(t, d.samples[t])); else addSampleRow();
+      checkSubmitReady();
+    })
+    .catch(() => {});
+}
+
+function submitValidate(){
+  const body = {
+    name: document.getElementById("sub-name").value.trim(),
+    ddl: document.getElementById("sub-ddl").value,
+    samples: collectSamples(),
+    relations: document.getElementById("sub-rel").value,
+    context: document.getElementById("sub-ctx").value,
+  };
+  const box = document.getElementById("submit-result");
+  box.innerHTML = `<p class="graph-hint">驗證中…</p>`;
+  fetch("/api/validate", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(r => r.json())
+    .then(d => { if (d.error){ box.innerHTML = `<div class="err">${esc(d.error)}</div>`; }
+                 else renderSubmitResult(d); })
+    .catch(() => {
+      box.innerHTML = `<div class="err">送驗失敗：需要先跑 ` +
+        `<span class="mono">.venv/bin/python webapp.py</span>。離線可用「報告」分頁載入既有報告。</div>`;
+    });
+}
+
+function applyFix(target, fixText){
+  const ta = document.getElementById("sub-ddl");
+  const table = String(target || "").split(/[.\s]/)[0].replace(/[^A-Za-z0-9_]/g, "");
+  const todo = `-- TODO(fix): ${fixText}`;
+  let ddl = ta.value;
+  let idx = -1;
+  if (table){
+    const re = new RegExp("create\\s+table\\s+(if\\s+not\\s+exists\\s+)?`?" + table + "`?", "i");
+    const m = ddl.match(re);
+    if (m) idx = m.index;
+  }
+  if (idx >= 0) ddl = ddl.slice(0, idx) + todo + "\n" + ddl.slice(idx);   // 對應表宣告附近
+  else ddl = ddl.replace(/\s*$/, "") + "\n" + todo + "\n";               // 找不到就插檔尾
+  ta.value = ddl;
+  checkSubmitReady();
+}
+
+function renderSubmitResult(report){
+  const box = document.getElementById("submit-result");
+  if (report.precheck_failed){
+    box.innerHTML = `<div class="blk"><h3>四件輸入未通過前置檢核（不產報告）</h3><ul>` +
+      (report.failed || []).map(f => `<li><b>${esc(f.label)}</b>：${esc(f.detail)}</li>`).join("") +
+      `</ul><p class="graph-hint">四件不齊或不一致不會產生報告；補齊後再按「送出驗證」。</p></div>`;
+    return;
+  }
+  currentReport = report;   // 讓 Lineage 分頁也能畫這份
+  const s = report.summary || {}, findings = report.findings || [];
+  const ok = !!s.compliant;
+  submitFixes = [];
+  const rows = findings.filter(f => f.status === "fail" || f.status === "warning").map(f => {
+    let btn = "";
+    if (f.fix){ const i = submitFixes.push({ target: f.target, fix: f.fix }) - 1;
+      btn = `<button class="btn-sm" data-fix="${i}">套用修正到編輯框</button>`; }
+    const fix = f.fix ? `<div class="ea"><span class="ea-l">修法</span>${esc(f.fix)}</div>` : "";
+    return `<tr><td class="st st-${esc(f.status)}"><span class="dot"></span></td>` +
+      `<td class="mono">${esc(f.check_id)}</td><td class="mono">${esc(f.target)}</td>` +
+      `<td>${esc(f.message)}${fix}</td><td>${btn}</td></tr>`;
+  }).join("");
+  box.innerHTML =
+    `<div class="verdict ${ok ? "ok" : "bad"}">${ok ? "✅ 合規" : "❌ 不合規"}` +
+    `（會擋 ${s.blocking_count ?? s.fail ?? 0}）</div>` +
+    `<p class="graph-hint">「套用修正」只把 <span class="mono">-- TODO(fix): …</span> 插進 DDL 編輯框，` +
+    `不自動送出也不改檔；你確認／修改後再按「送出驗證」重新驗證。</p>` +
+    (rows ? `<table><thead><tr><th></th><th>檢查</th><th>對象</th><th>說明</th><th></th></tr></thead>` +
+            `<tbody>${rows}</tbody></table>`
+          : `<p class="graph-hint">沒有 fail／warning 項目。</p>`);
+  box.querySelectorAll("button[data-fix]").forEach(b => b.addEventListener("click", () => {
+    const f = submitFixes[+b.dataset.fix];
+    applyFix(f.target, f.fix);
+    const old = b.textContent; b.textContent = "已插入 ✓";
+    setTimeout(() => { b.textContent = old; }, 1200);
+  }));
+  renderSubjectLineage();
 }
 
 let curFilter = "all";

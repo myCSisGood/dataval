@@ -5,14 +5,42 @@
 產出的 `*.report.html` 的差別：那份把資料**烤進**單一 HTML；這份是**解耦的元件**，
 在執行期吃 JSON，所以別的專案可以餵自己的報告資料進來，不必重寫渲染。
 
+viewer 有三個分頁：**報告**（載入 report.json 檢視）、**Lineage**（把目前報告的
+lineage 畫成關聯圖；有後端時另畫全域正式區關聯圖）、**送驗**（需後端，見下方 webapp）。
+
 ## 立即使用
 
-- **雙擊 `index.html`**（`file://` 即可）→ 把 `reports/xxx.report.json` 拖進去，或按「選擇 JSON 檔」。
+- **雙擊 `index.html`**（`file://` 即可）→ 「報告」分頁把 `reports/<域>/xxx.report.json`
+  拖進去，或按「選擇 JSON 檔」。「Lineage」分頁會畫出這份報告的關聯圖。
 - **用網址參數**（需 http 伺服器）：
   ```bash
   .venv/bin/python -m http.server 8000     # 在專案根目錄
-  # 開 http://localhost:8000/frontend/index.html?src=/reports/order.report.json
+  # 開 http://localhost:8000/frontend/index.html?src=/reports/CRM/order.report.json
   ```
+
+## 本機 web app（webapp.py）— 送驗與全域關聯圖
+
+「送驗」分頁與 Lineage 的「全域正式區關聯圖」需要一個本機後端。純標準庫、零框架：
+
+```bash
+.venv/bin/python webapp.py        # 預設 http://localhost:8765
+```
+
+它 in-process 呼叫**與 CLI 相同的** `dataval.engine.validate()`（不 shell 出去跑
+`run.py`）。CLI（`run.py`／`promote.py`／`rules.py`）完全不受影響、可獨立使用。
+
+| 路由 | 用途 |
+|---|---|
+| `GET /` | 這個 `index.html` |
+| `GET /api/subjects` | 列出 `input/` 下 subject 與四件齊全狀態 |
+| `GET /api/subject?name=X` | 既有 subject 的四件內容（供「載入既有」填入編輯框） |
+| `GET /api/lineage-graph` | 正式區全域關聯圖（`prodgraph.export_graph`） |
+| `POST /api/validate` | 把四件寫入 `input/<名>/` 後驗證，回傳 report JSON |
+
+送驗流程：填四件 → 「送出驗證」（四件皆非空才啟用）→ 看報告 → 對有修法的 finding 按
+「套用修正到編輯框」（只把 `-- TODO(fix): …` 插進 DDL 編輯框，**不自動送出也不改檔**）
+→ 自行確認後再按「送出驗證」重驗。沒有後端時（純 `file://` 雙擊），送驗分頁會提示需先
+啟動 webapp，其餘分頁照常可用。
 
 ## 整合契約（接到另一個專案）
 

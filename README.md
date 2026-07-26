@@ -285,7 +285,9 @@ config/                 第一層即領域：Common / BLM / SCM / PLM / FCM / CR
   _engine/              引擎層（default.yaml、templates、schema、er_diagrams、fixtures）
 production/             正式區（一 subject 一資料夾）
 build/                  compile 產物（自動生成）
-reports/                報告輸出
+reports/                報告輸出，依代表性 domain 分類到 reports/<域>/（優先非 Common
+                        的 domain；全 Common → Common/；無 domain → _uncategorized/）。
+                        precheck.md 例外，維持扁平放 reports/ 根（缺件時可能不知道 domain）
 rules_history/          規則版控（自動維護）
 drafts/                 規則起草暫存與紀錄
 tests/                  守門測試
