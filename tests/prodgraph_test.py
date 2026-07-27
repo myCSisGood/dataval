@@ -7,6 +7,8 @@
   G4 全區健檢：斷鏈 fail、legacy 平鋪 warn、規則版本碼 drift warn
   G5 晉升閘門：不合規的 subject 不能晉升；晉升記錄帶雙碼
 """
+from __future__ import annotations
+
 import json
 import os
 import shutil
@@ -23,6 +25,7 @@ import yaml  # noqa: E402
 from dataval import prodgraph  # noqa: E402
 from dataval.parser import parse_ddl  # noqa: E402
 from dataval.precheck import _parse_endpoint  # noqa: E402
+from dataval.provenance import sha256_file, validation_manifest  # noqa: E402
 
 
 def write(path: str, text: str):
@@ -70,7 +73,9 @@ class T_G1_GlobalCycleBlocks(ProdgraphCase):
                      "relations:\n  - from: a.b_id\n    to: b.b_id\n"
                      "    cardinality: \"N:1\"\n")
         schema = parse_ddl(DDL_B)
-        findings = prodgraph.run(schema, [rel("b.a_id", "a.a_id")], self.prod)
+        findings = prodgraph.run(
+            schema, [rel("b.a_id", "a.a_id")], self.prod,
+            candidate_domain="X")
         cycle = [f for f in findings if f.check_id == "PRODGRAPH.CYCLE"]
         self.assertEqual("fail", cycle[0].status)
         self.assertEqual("gating", cycle[0].zone)
@@ -83,7 +88,8 @@ class T_G2_CardinalityConflictBlocks(ProdgraphCase):
                      "    cardinality: \"N:1\"\n")
         schema = parse_ddl(DDL_A)
         findings = prodgraph.run(
-            schema, [rel("a.b_id", "b.b_id", "N:M")], self.prod)
+            schema, [rel("a.b_id", "b.b_id", "N:M")], self.prod,
+            candidate_domain="X")
         conflict = [f for f in findings
                     if f.check_id == "PRODGRAPH.CARDINALITY_CONFLICT"]
         self.assertEqual("fail", conflict[0].status)
@@ -94,7 +100,8 @@ class T_G2_CardinalityConflictBlocks(ProdgraphCase):
                      "    cardinality: \"N:1\"\n")
         schema = parse_ddl(DDL_A)
         findings = prodgraph.run(
-            schema, [rel("a.b_id", "b.b_id", "N:1")], self.prod)
+            schema, [rel("a.b_id", "b.b_id", "N:1")], self.prod,
+            candidate_domain="X")
         conflict = [f for f in findings
                     if f.check_id == "PRODGRAPH.CARDINALITY_CONFLICT"]
         self.assertEqual("pass", conflict[0].status)
@@ -107,7 +114,7 @@ class T_G3_ImpactAnalysisInfo(ProdgraphCase):
                      "relations:\n  - from: a.b_id\n    to: b.b_id\n"
                      "    cardinality: \"N:1\"\n")
         schema = parse_ddl(DDL_B)
-        findings = prodgraph.run(schema, [], self.prod)
+        findings = prodgraph.run(schema, [], self.prod, candidate_domain="X")
         impact = [f for f in findings if f.check_id == "PRODGRAPH.IMPACT"]
         self.assertEqual(1, len(impact))
         self.assertEqual("info", impact[0].status)
@@ -135,8 +142,69 @@ class T_G4_Audit(ProdgraphCase):
                             for lvl, _, msg in result["rows"]))
         self.assertTrue(result["ok"])  # legacy 只提醒不 fail
 
+    def test_domain_qualified_nodes_do_not_form_false_cycle(self):
+        make_subject(
+            self.prod, "X", "subj_x", DDL_A,
+            "relations:\n  - from: a.b_id\n    to: b.b_id\n"
+            "    cardinality: \"N:1\"\n")
+        make_subject(
+            self.prod, "Y", "subj_y", DDL_B,
+            "relations:\n  - from: b.a_id\n    to: a.a_id\n"
+            "    cardinality: \"N:1\"\n")
+        result = prodgraph.audit(self.prod)
+        self.assertFalse(any("循環" in message for _, _, message in result["rows"]))
+
+    def test_external_domain_cannot_be_satisfied_by_same_table_in_other_domain(self):
+        make_subject(self.prod, "CRM", "customer", DDL_A)
+        make_subject(
+            self.prod, "SCM", "consumer", DDL_B,
+            "relations:\n  - from: b.a_id\n    to: FCM.a.a_id\n"
+            "    cardinality: \"N:1\"\n")
+        result = prodgraph.audit(self.prod)
+        self.assertTrue(any(
+            level == "fail" and "FCM.a.a_id" in message
+            for level, _, message in result["rows"]))
+
+    def test_promoted_asset_hash_drift_fails(self):
+        base = make_subject(self.prod, "X", "subj_a", DDL_A)
+        paths = {
+            "ddl": os.path.join(base, "subj_a.sql"),
+            "relations": os.path.join(base, "subj_a.relations.yaml"),
+            "context": os.path.join(base, "subj_a.context.md"),
+        }
+        with open(os.path.join(base, "_promotion.yaml"), "w", encoding="utf-8") as f:
+            yaml.safe_dump({"input_hashes": {k: sha256_file(v)
+                                              for k, v in paths.items()}}, f)
+        write(paths["context"], "tampered\n")
+        result = prodgraph.audit(self.prod)
+        self.assertTrue(any(
+            level == "fail" and "完整性" in message
+            for level, _, message in result["rows"]))
+
 
 class T_G5_PromotionGate(unittest.TestCase):
+    def _compliant_fixture(self, tmp: str, name: str = "good"):
+        inp = os.path.join(tmp, "input")
+        rep = os.path.join(tmp, "reports")
+        prod = os.path.join(tmp, "production")
+        ddl = os.path.join(inp, f"{name}.sql")
+        write(ddl, DDL_A)
+        write(os.path.join(inp, f"{name}.relations.yaml"), "relations: []\n")
+        write(os.path.join(inp, f"{name}.context.md"),
+              f"---\nsubject: {name}\ndomains: [X]\n---\n## 粒度\n一行=一筆。\n")
+        write(os.path.join(inp, f"{name}.samples", "a.csv"), "a_id,b_id\n1,2\n")
+        manifest = validation_manifest(
+            ddl, os.path.join(ROOT, "build", "compiled_rules.json"))
+        write(os.path.join(rep, f"{name}.report.json"), json.dumps({
+            "summary": {"compliant": True},
+            "meta": {"validation_manifest": manifest},
+            "findings": [],
+        }))
+        env = dict(os.environ, DATAVAL_INPUT_DIR=inp,
+                   DATAVAL_REPORT_DIR=rep, DATAVAL_PRODUCTION_DIR=prod,
+                   PYTHONDONTWRITEBYTECODE="1")
+        return inp, rep, prod, ddl, env
+
     def test_noncompliant_subject_cannot_promote(self):
         with tempfile.TemporaryDirectory() as tmp:
             inp = os.path.join(tmp, "input")
@@ -146,6 +214,7 @@ class T_G5_PromotionGate(unittest.TestCase):
             write(os.path.join(inp, "bad.relations.yaml"), "relations: []\n")
             write(os.path.join(inp, "bad.context.md"),
                   "---\nsubject: bad\ndomains: [X]\n---\n## 粒度\n一行=一筆。\n")
+            write(os.path.join(inp, "bad.samples", "a.csv"), "a_id,b_id\n1,2\n")
             write(os.path.join(rep, "bad.report.json"), json.dumps(
                 {"summary": {"compliant": False},
                  "blocking_summary": {"blocked": [{"rule": "SKILL.x"}]},
@@ -169,6 +238,36 @@ class T_G5_PromotionGate(unittest.TestCase):
         a = promote.gate_result_code({"findings": [f1, f2, adv]})
         b = promote.gate_result_code({"findings": [f2, f1]})  # 順序無關、顧問區不計
         self.assertEqual(a, b)
+
+    def test_stale_compliant_report_cannot_promote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inp, rep, prod, ddl, env = self._compliant_fixture(tmp)
+            context = os.path.join(inp, "good.context.md")
+            write(context,
+                  "---\nsubject: good\ndomains: [X]\n---\n## 粒度\n已修改。\n")
+            result = subprocess.run(
+                [sys.executable, os.path.join(ROOT, "promote.py"), "good"],
+                cwd=ROOT, env=env, text=True, capture_output=True, check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("不一致", result.stderr)
+            self.assertFalse(os.path.exists(os.path.join(prod, "X", "good")))
+
+    def test_matching_manifest_promotes_and_records_hashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, _, prod, _, env = self._compliant_fixture(tmp)
+            result = subprocess.run(
+                [sys.executable, os.path.join(ROOT, "promote.py"), "good"],
+                cwd=ROOT, env=env, text=True, capture_output=True, check=False)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            destination = os.path.join(prod, "X", "good")
+            self.assertTrue(os.path.isfile(os.path.join(destination, "good.sql")))
+            with open(os.path.join(destination, "_promotion.yaml"),
+                      encoding="utf-8") as handle:
+                promotion = yaml.safe_load(handle)
+            self.assertIn("input_hashes", promotion)
+            self.assertEqual(
+                promotion["rule_version_code"],
+                promotion["validation_manifest"]["validation_bundle_code"])
 
 
 if __name__ == "__main__":

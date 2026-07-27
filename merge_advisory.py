@@ -12,6 +12,7 @@
 閘門區完全不受影響（agent 的建議一律進顧問區、標 info、永不擋）。
 """
 from __future__ import annotations
+import argparse
 import json
 import os
 import sys
@@ -21,19 +22,59 @@ from dataval.report import to_json, to_markdown, to_html, summarize
 from dataval.model import Finding, ZONE_ADVISORY
 from dataval.llm import NullLLM
 from dataval.advisory_export import validate_advisory_result
-from dataval import report_paths
 
 import run as R  # reuse paths + the single DDL/case-config loader
 
 
-def _locate_result(report_dir: str, name: str) -> str | None:
-    """定位 agent 產生的 advisory_result.json：先找報告所在的分類子夾，
-    再退回 reports/ 根（相容舊工作流程 agent 直接寫在扁平路徑）。"""
-    for base in (report_dir, R.REPORT_DIR):
-        candidate = os.path.join(base, name + ".advisory_result.json")
-        if os.path.isfile(candidate):
-            return candidate
-    return None
+def _load_case(ddl_path: str):
+    """Use the same strict/legacy input contract as run.py."""
+    mode = os.environ.get("DATAVAL_PRECHECK", "strict").strip().lower()
+    if mode == "legacy":
+        return R.load_input(ddl_path)
+    pre = R.preflight.run_precheck(ddl_path)
+    if not pre.passed:
+        details = "；".join(item.detail for item in pre.items if not item.ok)
+        raise ValueError(f"四件輸入未通過前置檢核：{details}")
+    return R.load_input_v2(ddl_path, pre)
+
+
+def _advisory_complete(report_path: str) -> tuple[bool, str]:
+    if not os.path.isfile(report_path):
+        return False, "缺 report.json"
+    try:
+        with open(report_path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception as error:
+        return False, f"report.json 無法讀取：{error}"
+    if (payload.get("meta") or {}).get("advisory_merged"):
+        return True, "已由 agent 合併"
+    findings = (payload.get("advisory_zone") or {}).get("findings")
+    if not isinstance(findings, list):
+        return False, "報告缺 advisory_zone.findings"
+    pending = [finding for finding in findings
+               if finding.get("status") == "skipped" and
+               finding.get("source") == "llm"]
+    if pending:
+        return False, f"仍有 {len(pending)} 項語意檢查待補"
+    return True, "顧問區沒有待補項目"
+
+
+def status(ddls: list[str]) -> int:
+    incomplete = 0
+    for ddl_path in ddls:
+        name = os.path.splitext(os.path.basename(ddl_path))[0]
+        complete, detail = _advisory_complete(
+            os.path.join(R.REPORT_DIR, name + ".report.json"))
+        print(f"  {'✅' if complete else '❌'} {name}: {detail}")
+        incomplete += 0 if complete else 1
+    if not ddls:
+        print("找不到任何 DDL。")
+        return 1
+    if incomplete:
+        print(f"❌ {incomplete} 份報告的顧問區尚未完成。")
+        return 1
+    print("✅ 所有報告的顧問區均已完成。")
+    return 0
 
 
 def _canonical_gating(items: list[dict]) -> list[str]:
@@ -77,16 +118,20 @@ def _advisory_from_result(result: dict) -> list[Finding]:
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--status", action="store_true",
+                        help="只檢查所有報告的顧問區是否已補完")
+    args = parser.parse_args()
     cfg = load_config(R.CONFIG)
     ddls = R.find_ddls()
+    if args.status:
+        sys.exit(status(ddls))
     merged = 0
     guard_failed = 0
     for ddl_path in ddls:
         name = os.path.splitext(os.path.basename(ddl_path))[0]
-        report_path = report_paths.find_report_json(R.REPORT_DIR, name)
-        report_dir = os.path.dirname(report_path) if report_path else R.REPORT_DIR
-        result_path = _locate_result(report_dir, name)
-        if result_path is None:
+        result_path = os.path.join(R.REPORT_DIR, name + ".advisory_result.json")
+        if not os.path.isfile(result_path):
             continue
         try:
             with open(result_path, encoding="utf-8") as f:
@@ -97,17 +142,20 @@ def main():
             continue
         schema_errors = validate_advisory_result(result)
         if schema_errors:
-            print(f"  {name}: advisory_result 不符合 config/_engine/advisory_result.schema.json")
+            print(f"  {name}: advisory_result 不符合 "
+                  "config/_engine/advisory_result.schema.json")
             for error in schema_errors:
                 print(f"    - {error}")
             guard_failed += 1
             continue
 
-        case = R.load_input(ddl_path)
-        if report_path is None:
-            print(f"  {name}: 找不到既有 report.json，請先跑 python run.py，略過")
+        try:
+            case = _load_case(ddl_path)
+        except Exception as error:
+            print(f"  {name}: 無法依目前輸入契約載入（{error}），停止合併")
             guard_failed += 1
             continue
+        report_path = os.path.join(R.REPORT_DIR, name + ".report.json")
         try:
             previous_gating = _gating_from_report(report_path)
         except Exception as e:
@@ -119,12 +167,17 @@ def main():
         schema, findings, meta = validate(
             case.ddl, cfg, sample_data=case.sample, context=case.context,
             business_keys=case.business_keys, lineage_spec=case.lineage,
+            relations=case.relations,
             er_diagram=case.er_diagram,
             diagnostics=case.diagnostics, llm=NullLLM(),
             domain_root=R.DOMAIN_ROOT, rules_root=R.RULES_ROOT,
             domains=case.domains,
             config_dir=R.CONFIG_DIR, production_root=R.PRODUCTION_ROOT)
         meta["case_config"] = case.config_source
+        compiled_path = os.path.join(R.HERE, "build", "compiled_rules.json")
+        meta["validation_manifest"] = R.validation_manifest(ddl_path, compiled_path)
+        meta["rule_version_code"] = meta["validation_manifest"][
+            "validation_bundle_code"]
 
         current_gating = _gating_from_findings(findings)
         if current_gating != previous_gating:
@@ -153,13 +206,11 @@ def main():
             ".report.html": to_html(findings, meta),
         }
         for suffix, content in outputs.items():
-            with open(os.path.join(report_dir, name + suffix), "w",
+            with open(os.path.join(R.REPORT_DIR, name + suffix), "w",
                       encoding="utf-8") as f:
                 f.write(content)
         s = summarize(findings)
-        html_rel = os.path.relpath(os.path.join(report_dir, name + ".report.html"),
-                                   R.HERE)
-        print(f"  {name}: 顧問區已補完（{s['advisory']} 項）→ {html_rel}")
+        print(f"  {name}: 顧問區已補完（{s['advisory']} 項）→ reports/{name}.report.html")
         merged += 1
 
     if merged == 0 and guard_failed == 0:

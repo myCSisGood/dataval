@@ -11,11 +11,11 @@ htmlcov/
 .env.*
 !.env.example
 
-# 報告產物（html／prompt／summary／agent 結果）不進版控；分類到 reports/<域>/ 後
-# 用 **/ 讓子資料夾也一併忽略。.report.json／.report.md／.precheck.md 仍入庫。
-reports/**/*.report.html
-reports/**/*.advisory_result.json
-reports/**/*.advisory_prompt.md
-reports/**/*.subject_summary.md
+# 報告產物（html／prompt／summary／agent 結果）不進版控；
+# .report.json／.report.md／.precheck.md 仍入庫。webapp 的時間戳歷史版另存 .history/。
+reports/*.report.html
+reports/*.advisory_result.json
+reports/*.advisory_prompt.md
+reports/*.subject_summary.md
 reports/.history/
 examples/lineage/reports/

@@ -32,6 +32,7 @@ from .model import Finding, Schema, ZONE_ADVISORY, ZONE_GATING
 from .parser import parse_ddl
 from .precheck import _parse_endpoint, CARDINALITIES
 from .lineage import _has_cycle
+from .provenance import sha256_file
 
 
 def _finding(check_id: str, status: str, target: str, message: str, *,
@@ -79,6 +80,10 @@ def _load_relations(path: str, subject: "ProductionSubject"):
         card = rel.get("cardinality")
         if src is None or dst is None or card not in CARDINALITIES:
             subject.problems.append(f"relations 第 {i} 條格式不合法")
+            continue
+        if src["scope"] != "local":
+            subject.problems.append(
+                f"relations 第 {i} 條 from 必須是本 subject 的 table.column")
             continue
         rel = dict(rel)
         rel["_from"], rel["_to"] = src, dst
@@ -145,16 +150,26 @@ def load_subjects(production_root: str) -> list[ProductionSubject]:
 
 # ------------------------------------------------------------ 圖與比對
 
-def _pair_key(rel: dict) -> tuple[str, str]:
-    """關聯宣告的識別鍵：(from table.col, to table.col)，跨 domain 去前綴。"""
+def _endpoint_key(endpoint: dict, owner_domain: str) -> str:
+    domain = (endpoint.get("domain") if endpoint["scope"] == "external"
+              else owner_domain)
+    return f"{str(domain).lower()}.{endpoint['table'].lower()}"
+
+
+def _column_key(endpoint: dict, owner_domain: str) -> str:
+    return f"{_endpoint_key(endpoint, owner_domain)}.{endpoint['column'].lower()}"
+
+
+def _pair_key(rel: dict, owner_domain: str) -> tuple[str, str]:
+    """Domain-qualified relation identity for cardinality comparison."""
     src, dst = rel["_from"], rel["_to"]
-    return (f"{src['table']}.{src['column']}".lower(),
-            f"{dst['table']}.{dst['column']}".lower())
+    return (_column_key(src, owner_domain), _column_key(dst, owner_domain))
 
 
-def _edges(relations: list[dict]) -> list[tuple[str, str]]:
+def _edges(relations: list[dict], owner_domain: str) -> list[tuple[str, str]]:
     """資料方向：to（權威/「1」的一方，上游）→ from（引用方，下游）。"""
-    return [(rel["_to"]["table"].lower(), rel["_from"]["table"].lower())
+    return [(_endpoint_key(rel["_to"], owner_domain),
+             _endpoint_key(rel["_from"], owner_domain))
             for rel in relations]
 
 
@@ -164,47 +179,15 @@ def _declared_cards(subjects: list[ProductionSubject]
     out: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for s in subjects:
         for rel in s.relations:
-            out.setdefault(_pair_key(rel), []).append(
+            out.setdefault(_pair_key(rel, s.domain), []).append(
                 (f"{s.domain}/{s.name}", str(rel.get("cardinality"))))
     return out
-
-
-def export_graph(production_root: str,
-                 domains: list[str] | None = None) -> dict:
-    """匯出正式區跨 subject 的全域關聯圖，供前端／工具視覺化。
-
-    回傳 {"nodes": [{"id", "domain", "subject"}], "edges": [{"from", "to"}]}。
-    重用 load_subjects() 與 _edges()（資料方向：上游→下游），只是把區域變數
-    轉成可序列化資料，不重寫掃描邏輯。node id 一律小寫（與 _edges 一致）。
-    可用 domains 過濾只匯出指定 domain 的 subject。
-    """
-    wanted = {d.strip().lower() for d in domains} if domains else None
-    nodes: dict[str, dict] = {}
-    edges: list[dict] = []
-    seen_edge: set[tuple[str, str]] = set()
-    for s in load_subjects(production_root):
-        if wanted is not None and s.domain.lower() not in wanted:
-            continue
-        for tname in s.tables:
-            nid = tname.lower()
-            nodes.setdefault(nid, {"id": nid, "domain": s.domain,
-                                   "subject": s.name})
-        for up, down in _edges(s.relations):
-            # 端點可能指向他 subject 的表；補成節點（domain 未知標 "?"）。
-            for nid in (up, down):
-                nodes.setdefault(nid, {"id": nid, "domain": "?", "subject": ""})
-            key = (up, down)
-            if key not in seen_edge:
-                seen_edge.add(key)
-                edges.append({"from": up, "to": down})
-    return {"nodes": sorted(nodes.values(), key=lambda n: n["id"]),
-            "edges": sorted(edges, key=lambda e: (e["from"], e["to"]))}
 
 
 # ------------------------------------------------------------ 新 subject 驗證
 
 def run(schema: Schema, relations: list[dict] | None,
-        production_root: str) -> list[Finding]:
+        production_root: str, candidate_domain: str = "") -> list[Finding]:
     subjects = load_subjects(production_root)
     relations = relations or []
     if not subjects:
@@ -215,8 +198,9 @@ def run(schema: Schema, relations: list[dict] | None,
     # ① 全域循環：正式區所有邊 ＋ 候選 subject 的邊
     edges = []
     for s in subjects:
-        edges.extend(_edges(s.relations))
-    edges.extend(_edges(relations))
+        edges.extend(_edges(s.relations, s.domain))
+    candidate_owner = candidate_domain or "__candidate__"
+    edges.extend(_edges(relations, candidate_owner))
     cycle = _has_cycle(edges)
     if cycle:
         findings.append(_finding(
@@ -230,7 +214,7 @@ def run(schema: Schema, relations: list[dict] | None,
     declared = _declared_cards(subjects)
     conflict = False
     for rel in relations:
-        key = _pair_key(rel)
+        key = _pair_key(rel, candidate_owner)
         mine = str(rel.get("cardinality"))
         for owner, theirs in declared.get(key, []):
             if theirs != mine:
@@ -245,11 +229,13 @@ def run(schema: Schema, relations: list[dict] | None,
                     fix="釐清正確基數；修正本 subject 或提請修正正式區宣告。"))
 
     # ③ 影響分析：候選 DDL 定義的表，在正式區有誰依賴（改動的爆炸半徑）
-    local_tables = {t.name.lower() for t in schema.tables}
+    local_tables = {
+        f"{candidate_domain.lower()}.{t.name.lower()}" for t in schema.tables
+    } if candidate_domain else set()
     dependents: dict[str, list[str]] = {}
     for s in subjects:
         for rel in s.relations:
-            up = rel["_to"]["table"].lower()
+            up = _endpoint_key(rel["_to"], s.domain)
             if up in local_tables:
                 dependents.setdefault(up, []).append(
                     f"{s.domain}/{s.name}（{rel['from']}）")
@@ -287,7 +273,7 @@ def audit(production_root: str, rule_code: str | None = None) -> dict:
 
     all_tables: set[str] = set()
     for s in subjects:
-        all_tables.update(name.lower() for name in s.tables)
+        all_tables.update(f"{s.domain.lower()}.{name.lower()}" for name in s.tables)
 
     for s in subjects:
         label = f"{s.domain}/{s.name}"
@@ -299,9 +285,28 @@ def audit(production_root: str, rule_code: str | None = None) -> dict:
             rows.append((level, label, f"缺 {m}"))
         for p in s.problems:
             rows.append(("fail", label, p))
+        if s.promotion:
+            recorded = s.promotion.get("input_hashes") or {}
+            governed_paths = {
+                "ddl": os.path.join(s.path, f"{s.name}.sql"),
+                "relations": os.path.join(s.path, f"{s.name}.relations.yaml"),
+                "context": os.path.join(s.path, f"{s.name}.context.md"),
+            }
+            for logical, path in governed_paths.items():
+                expected = recorded.get(logical)
+                if expected and os.path.isfile(path):
+                    actual = sha256_file(path)
+                    if actual != expected:
+                        rows.append((
+                            "fail", label,
+                            f"正式資產完整性失敗：{logical} 內容與晉升記錄不一致。"))
+            if not recorded and not s.legacy:
+                rows.append((
+                    "warn", label,
+                    "晉升記錄沒有 input_hashes；請重新驗證並晉升以建立完整可信鏈。"))
         # 斷鏈：關聯的 to 端點表在整個正式區都找不到
         for rel in s.relations:
-            up = rel["_to"]["table"].lower()
+            up = _endpoint_key(rel["_to"], s.domain)
             if up not in all_tables:
                 rows.append(("fail", label,
                              f"斷鏈：{rel['from']} → {rel['to']} 的上游表 "
@@ -317,7 +322,7 @@ def audit(production_root: str, rule_code: str | None = None) -> dict:
     # 全域循環（僅正式區內部）
     edges = []
     for s in subjects:
-        edges.extend(_edges(s.relations))
+        edges.extend(_edges(s.relations, s.domain))
     if _has_cycle(edges):
         rows.append(("fail", "(全域關聯圖)", "正式區關聯圖存在循環依賴。"))
 

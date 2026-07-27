@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 import importlib.util
+import json
 import os
 import re
 import sys
@@ -19,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 DOMAIN_ROOT = os.path.join(HERE, "config")
 RULES_ROOT = os.path.join(HERE, "config", "Common", "knowhow_py")
-TEMPLATES = os.path.join(HERE, "config", "templates")
+TEMPLATES = os.path.join(HERE, "config", "_engine", "templates")
 
 from dataval.skills import COMMON_DOMAIN, SkillRegistry, VALID_CATEGORIES
 from dataval.skills.markdown_skill import load_markdown_skill
@@ -73,6 +74,15 @@ def cmd_new(domain: str, zone: str, rule_id: str):
     print(f"1. 編輯 {rel}")
     print("2. 執行 python rules.py check")
     print("3. 執行 python run.py，在報告查看 SKILL." + rule_id)
+
+
+def _validate_coordinates(domain: str, zone: str, rule_id: str):
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", rule_id or ""):
+        raise SystemExit("rule_id 必須是小寫英數底線，例如 order_needs_created_at")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", domain or ""):
+        raise SystemExit("domain 只能包含英數、底線或連字號")
+    if zone not in ("gating", "advisory"):
+        raise SystemExit("zone 必須是 gating 或 advisory")
 
 
 def _write_if_absent(path: str, content: str,
@@ -297,12 +307,28 @@ def lint_one(path: str) -> list[str]:
         issues.append("check-llm 的 enforcement 必須是 advisory")
     if sk.check_lines and sk.enforcement == "advisory":
         issues.append("確定性 check 不得使用 advisory enforcement")
+    for line in sk.unparsed:
+        issues.append(f"卡控語句無法解析 → {line}")
+    if not sk.check_lines and not sk.check_llm:
+        issues.append("沒有任何卡控區塊")
+    for label, pattern in _rule_regexes(sk):
+        try:
+            re.compile(pattern)
+        except re.error as error:
+            issues.append(f"{label} regex 無效 /{pattern}/ → {error}")
+    registry = SkillRegistry()
+    registry.load_domains(DOMAIN_ROOT, domains=None, rules_root=RULES_ROOT)
+    existing = {rule_id.replace("SKILL.", "", 1)
+                for rule_id in registry.loaded_rule_ids}
+    if sk.id in existing:
+        issues.append(f"rule id 已存在於現行規則集 → {sk.id}")
     return issues
 
 
 def cmd_draft(domain: str, zone: str, rule_id: str, description: str):
     from dataval.drafting import create_draft
     from dataval.llm import from_env
+    _validate_coordinates(domain, zone, rule_id)
     out, mode = create_draft(os.path.join(HERE, "drafts"), domain, zone,
                              rule_id, description, llm=from_env())
     rel = os.path.relpath(out, HERE)
@@ -337,12 +363,49 @@ def cmd_compile():
     path, recompiled = ensure_compiled(DOMAIN_ROOT, RULES_ROOT,
                                        os.path.join(HERE, "build", "compiled_rules.json"))
     print(("已重新 compile → " if recompiled else "規則未變，沿用 → ") + os.path.relpath(path, HERE))
+    return path
+
+
+def cmd_docs(compiled_path: str | None = None):
+    """Generate a deterministic rule index from the executable manifest."""
+    from dataval.prodgraph import current_rule_code
+    compiled_path = compiled_path or cmd_compile()
+    with open(compiled_path, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    lines = [
+        "# 規則索引（自動生成）",
+        "",
+        "> 請勿手改；執行 `python rules.py check` 會依 executable manifest 重建。",
+        "",
+        f"- 驗證 bundle：`{current_rule_code(compiled_path)}`",
+        f"- 規則總數：{payload.get('rule_count', 0)}",
+        f"- 格式：`{payload.get('format', '')}`",
+        "",
+        "| Rule ID | Domain | Zone | Enforcement | 類別 | 來源 |",
+        "|---|---|---|---|---|---|",
+    ]
+    for rule in payload.get("rules", []):
+        source = rule.get("file", "")
+        if rule.get("source_sha256"):
+            source += f" @ {rule['source_sha256'][:12]}"
+        lines.append(
+            f"| `{rule.get('id')}` | {rule.get('domain')} | {rule.get('zone')} | "
+            f"{rule.get('enforcement')} | {rule.get('category')} | `{source}` |")
+    dependencies = (payload.get("implementation") or {}).get("dependencies") or {}
+    lines.extend(["", "## Validator 依賴", ""])
+    for name, version in sorted(dependencies.items()):
+        lines.append(f"- {name}: `{version}`")
+    target = os.path.join(HERE, "docs", "規則索引.generated.md")
+    with open(target, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+    print("已更新規則索引 → " + os.path.relpath(target, HERE))
+    return target
 
 
 def cmd_check():
     """新增或修改規則後的一站式檢查。"""
     cmd_lint()
-    cmd_compile()
+    cmd_docs(cmd_compile())
 
 
 if __name__ == "__main__":
@@ -353,6 +416,8 @@ if __name__ == "__main__":
         cmd_adopt(sys.argv[2])
     elif len(sys.argv) >= 2 and sys.argv[1] == "compile":
         cmd_compile()
+    elif len(sys.argv) >= 2 and sys.argv[1] == "docs":
+        cmd_docs()
     elif len(sys.argv) >= 2 and sys.argv[1] == "check":
         cmd_check()
     elif len(sys.argv) >= 2 and sys.argv[1] == "list":

@@ -6,8 +6,8 @@
 
 行為：
   - 自動找 input/ 裡的 *.sql / *.ddl
-  - 自動載入 config/cases/<DDL 名>.yaml 的治理設定與少量 sample data
-  - 自動載入 config/domains 與 config/rules 裡的規則
+  - 自動載入每個 subject 的 samples、relations.yaml 與 context.md
+  - 自動載入 config/<域>/knowhow 與 Common/knowhow_py 裡的規則
   - 每個 DDL 都產生 reports/<名稱>.report.{md,json,html}
   - LLM 看環境變數 DATAVAL_LLM_BASE_URL；沒設就只跑閘門區（仍能出合規判定）
 """
@@ -29,7 +29,7 @@ from dataval.er_diagram import parse_mermaid
 from dataval.parser import parse_ddl
 from dataval.model import Finding, ZONE_ADVISORY, ZONE_GATING
 from dataval import precheck as preflight
-from dataval import report_paths
+from dataval.provenance import validation_manifest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR = os.environ.get("DATAVAL_INPUT_DIR", os.path.join(HERE, "input"))
@@ -243,7 +243,7 @@ def er_diagram_for(ddl_path: str, diagnostics: list[Finding] | None = None,
                 "SYSTEM.ER_DIAGRAM_PARSE", "lineage", "info", source,
                 "ER diagram 有無法解析的內容：" + "；".join(diagram["errors"]),
                 severity="info", source="rule", zone=ZONE_ADVISORY,
-                fix="依 config/er_diagrams/README.md 修正 Mermaid 語法。"))
+                fix="依 config/<域>/erd/README.md 修正 Mermaid 語法。"))
         return diagram
     return None
 
@@ -317,7 +317,7 @@ def load_input_v2(ddl_path: str,
 def merge_domain_erds(er_diagram: dict | None, domains: list[str] | None,
                       ddl_table_names: set[str],
                       diagnostics: list[Finding]) -> dict | None:
-    """疊加 domain 參考 ER 模型（config/domainss/<域>/erd/*.mmd）。
+    """疊加 domain 參考 ER 模型（config/<域>/erd/*.mmd）。
 
     只取「兩端表都出現在本次 DDL」的關係，供 LINEAGE.ER_SUGGESTION 比對；
     個案 ER 圖（config/<域>/cases/<名>.mmd）優先，domain 模型是補充參照。
@@ -448,6 +448,7 @@ def main():
           + ("" if precheck_mode != "legacy" else "；前置檢核：legacy（相容模式）"))
     any_noncompliant = False
     any_precheck_failed = False
+    advisory_pending: list[str] = []  # subjects whose 顧問區 still needs an agent LLM
     for ddl_path in ddls:
         name = os.path.splitext(os.path.basename(ddl_path))[0]
         if precheck_mode == "legacy":
@@ -474,12 +475,14 @@ def main():
             domain_root=DOMAIN_ROOT, rules_root=RULES_ROOT, domains=case.domains,
             config_dir=CONFIG_DIR, production_root=PRODUCTION_ROOT)
         meta["case_config"] = case.config_source
+        meta["validation_manifest"] = validation_manifest(ddl_path, compiled_path)
+        # Backward-compatible display key. The value now covers declarative
+        # rules, Python rules, built-in validators, and parser dependencies.
+        meta["rule_version_code"] = meta["validation_manifest"][
+            "validation_bundle_code"]
 
-        # 依代表性 domain 把報告分類到 reports/<域>/。此時 domains 已知
-        # （驗證已回傳 meta），所以三式報告、advisory_prompt、subject_summary
-        # 都放進分類資料夾；precheck.md 例外——它可能在完全不知道 domain 時就
-        # 失敗，故維持扁平放在 reports/ 根（見上方 precheck 寫檔）。
-        out_dir = report_paths.report_dir_for(REPORT_DIR, meta.get("domains_loaded"))
+        # 報告平鋪在 reports/ 根（沿用上游佈局）。
+        out_dir = REPORT_DIR
         md_path = os.path.join(out_dir, name + ".report.md")
         js_path = os.path.join(out_dir, name + ".report.json")
         html_path = os.path.join(out_dir, name + ".report.html")
@@ -504,6 +507,7 @@ def main():
             with open(os.path.join(out_dir, name + ".advisory_prompt.md"),
                       "w", encoding="utf-8") as f:
                 f.write(prompt)
+            advisory_pending.append(name)
 
         s = summarize(findings)
         flag = "✅ 合規" if s["compliant"] else f"❌ 不合規（會擋 {s['blocking_count']}）"
@@ -528,10 +532,26 @@ def main():
               f"（＋摘要 {name}.subject_summary.md）")
 
     print(f"完成。報告在 {report_dir_label}/ 資料夾。")
-    if not llm_on:
-        print("（HTML 已產生；未接本地 LLM 的語意規則會標示待補完。若要補齊，"
-              "可依 *.advisory_prompt.md 產出 advisory_result.json，再執行 "
-              "python merge_advisory.py。）")
+    if advisory_pending:
+        # 這段是刻意寫給「正在跑 run.py 的 agent（opencode / Claude Code）」看的
+        # 待辦指令：報告的顧問區尚未補完，agent 必須用自身 LLM 接著把它填完，
+        # 否則交付的報告不完整（HTML 顧問區只會顯示「待補完」）。
+        print("")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("⚠️  顧問區尚未補完——報告還不算完成。")
+        print("   run.py 是零 LLM 的閘門區行程，語意建議需要 agent 用自身 LLM 補上。")
+        print(f"   待補主題（{len(advisory_pending)} 個）："
+              + "、".join(advisory_pending))
+        print("")
+        print("   👉 正在執行的 agent 請立刻完成以下步驟（這是輸出報告的一部分）：")
+        for nm in advisory_pending:
+            print(f"     1. 讀 {report_dir_label}/{nm}.advisory_prompt.md，"
+                  f"依其格式與 schema 產出 {report_dir_label}/{nm}.advisory_result.json")
+        print(f"     2. 執行：python merge_advisory.py")
+        print(f"     3. 執行：python merge_advisory.py --status（exit 0 = 顧問區全數補完）")
+        print("   完成後 HTML 顧問區才會顯示真實建議，而非「待補完」。")
+        print("   （若本機另有直連 LLM，可改設 DATAVAL_LLM_BASE_URL 讓 run.py 直接填。）")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     if any_precheck_failed:
         print("有 data subject 輸入不齊全，未產生報告。四件輸入格式見 "
               "input/README.md；缺件明細見 reports/*.precheck.md。",

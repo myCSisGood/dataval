@@ -43,6 +43,9 @@ class SkillRegistry:
         self.load_errors: list[str] = []
         self.requested_domains: list[str] = []
         self.unknown_domains: list[str] = []
+        # 完整規則清單（bundle 內所有域的規則，與是否載入無關），供涵蓋率報告使用。
+        self.inventory: list[dict] = []
+        self.available_domains: list[str] = []
 
     def load_compiled(self, compiled_path: str, domains: list[str] | None = None,
                       config_dir: str = "config"):
@@ -61,8 +64,19 @@ class SkillRegistry:
             d for d in requested
             if d.lower() not in known and d.lower() not in ("*", "all"))
         common_key = COMMON_DOMAIN.lower()
+        self.available_domains = [str(d) for d in (data.get("domains") or [])]
         for e in data.get("rules", []):
             dom = e.get("domain", "?")
+            # 先登錄到完整清單（不論本次是否載入），涵蓋率報告才看得到被略過的規則。
+            self.inventory.append({
+                "id": f"SKILL.{e.get('id', '?')}",
+                "domain": dom,
+                "zone": e.get("zone", "gating"),
+                "kind": e.get("kind", ""),
+                "category": e.get("category", ""),
+                "title": e.get("title", ""),
+                "file": e.get("file", ""),
+            })
             if dom.lower() != common_key and not load_all and dom.lower() not in wanted:
                 continue
             if e.get("kind") == "python":

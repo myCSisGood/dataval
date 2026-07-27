@@ -12,7 +12,7 @@
   GET  /                   擴充後的 frontend/index.html
   GET  /api/subjects       列出 input/ 下 subject 與四件齊全狀態
   GET  /api/subject?name=X 回傳既有 subject 的四件內容（供載入編輯框）
-  GET  /api/lineage-graph  正式區全域關聯圖（prodgraph.export_graph）
+  GET  /api/lineage-graph  正式區全域關聯圖（graph_export.export_graph）
   POST /api/validate       寫入 input/<name>/ 後 in-process 驗證，回傳 report JSON
 """
 from __future__ import annotations
@@ -27,9 +27,8 @@ from urllib.parse import urlparse, parse_qs
 from dataval.engine import load_config, validate
 from dataval.report import to_json, to_markdown, to_html, diff_findings
 from dataval.llm import NullLLM
-from dataval.prodgraph import export_graph
+from dataval.graph_export import export_graph
 from dataval import precheck as preflight
-from dataval import report_paths
 from simulate_impact import simulate_all
 
 import run as R  # 沿用 INPUT_DIR/CONFIG/DOMAIN_ROOT… 與 load_input_v2
@@ -137,8 +136,9 @@ def rule_snapshot(fn: str) -> tuple[int, dict]:
 
 
 def persist_report(name: str, findings, meta) -> str:
-    """把驗證結果寫成三式報告到 reports/<域>/，並存一份時間戳歷史版供同系列比對。"""
-    out_dir = report_paths.report_dir_for(R.REPORT_DIR, meta.get("domains_loaded"))
+    """把驗證結果寫成三式報告到 reports/（平鋪，沿用上游佈局），並存一份時間戳歷史版供同系列比對。"""
+    out_dir = R.REPORT_DIR
+    os.makedirs(out_dir, exist_ok=True)
     js = to_json(findings, meta)
     with open(os.path.join(out_dir, name + ".report.json"), "w", encoding="utf-8") as f:
         f.write(js)

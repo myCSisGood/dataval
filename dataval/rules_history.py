@@ -86,6 +86,8 @@ def _changelog_entry(record: dict) -> str:
     for r in d["changed"]:
         keys = "、".join(r["fields"])
         lines.append(f"- ✏️ 修改 `{r['id']}`：{keys}")
+    if d.get("implementation_changed"):
+        lines.append("- 🧩 驗證引擎／Python rule／依賴版本 bundle 有變更")
     lines.append(f"- 快照：`{d['snapshot_file']}`")
     return "\n".join(lines) + "\n\n"
 
@@ -120,6 +122,10 @@ def record_change(old_text: str | None, new_text: str,
         "changed": delta["changed"],
         "snapshot_file": snapshot_name,
         "rules": new_payload.get("rules", []),
+        "implementation": new_payload.get("implementation", {}),
+        "implementation_changed": (
+            (old_payload or {}).get("implementation") !=
+            new_payload.get("implementation")),
     }
     with open(os.path.join(history_dir, snapshot_name), "w",
               encoding="utf-8") as f:

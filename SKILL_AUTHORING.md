@@ -21,7 +21,7 @@
    - 兩種都寫不出來、邏輯太複雜 → 改寫 Python skill（見第 6 節）。
 3. **屬於哪一類、哪個 domain？**
    - 類別 category：`structural` / `naming` / `best_practice` / `ssot`（擇一）。
-   - domain：放 `config/<domain>/gating/` 或 `<domain>/advisory/`。
+   - domain：放 `config/<domain>/knowhow/gating/` 或 `knowhow/advisory/`。
      跨 domain 共用的底線放 `Common/`。
 
 ---
@@ -108,7 +108,7 @@ require: engine_matches <正則>                    # （ClickHouse）引擎需�
 require: table_name_matches <正則>                # 表名需符合樣式
 require: type_not_used <型別片段>                 # 不可使用某型別，如 Float
 require: lowcardinality_when_present <欄位>        # （ClickHouse）該欄位存在時建議用 LowCardinality
-require: no_banned_term                          # 欄位名不可含字典裡的禁用詞（對照 config/domainss/Common/naming/glossary.yaml）
+require: no_banned_term                          # 欄位名不可含字典裡的禁用詞（對照 config/Common/naming/glossary.yaml）
 require: no_alias_term                           # 欄位名不可用別名（非標準詞）
 require: term_in_glossary                        # 欄位用詞須在認可字典內（需 glossary 設 standard_terms）
 require: all_columns_name_match <正則>            # 所有欄位名須符合樣式
@@ -195,12 +195,12 @@ BOM 結構若有循環引用、缺漏父階、用量語意不清，會導致成�
 
 ```
 config/
-├── Common/{gating,advisory}/        ← 跨 domain 共用
-└── <DOMAIN>/{gating,advisory}/      ← 各領域，如 PLM、FCM
+├── Common/knowhow/{gating,advisory}/        ← 跨 domain 共用
+└── <DOMAIN>/knowhow/{gating,advisory}/      ← 各領域，如 PLM、FCM
 ```
 
-- gating skill（```check）放 `<domain>/gating/`。
-- advisory skill（```check-llm）放 `<domain>/advisory/`。
+- gating skill（```check）放 `<domain>/knowhow/gating/`。
+- advisory skill（```check-llm）放 `<domain>/knowhow/advisory/`。
 - 檔名建議用 `id` 或可讀的描述，例如 `txn_amount_needs_currency.md`。
 - 新增 domain 只要建資料夾、丟 `.md`，會自動被掃到，不用註冊。
 
@@ -209,7 +209,7 @@ config/
 ## 6. 何時改用 Python skill
 
 當判斷需要走訪整個 schema、跨表比對、遞迴（如真正偵測 BOM 循環引用），
-` ```check ` 的語句寫不出來時，改寫 Python，放 `config/domainss/Common/knowhow_py/`：
+` ```check ` 的語句寫不出來時，改寫 Python，放 `config/Common/knowhow_py/`：
 
 ```python
 from dataval.model import Finding, ZONE_GATING
@@ -240,7 +240,7 @@ Python skill 必須宣告 `id` 與 `domain`。若函式沒有回傳 finding，
       advisory（```check-llm）→ enforcement 是 advisory。
 - [ ] ```check 區塊內每一行都用第 3 節清單裡的動詞，沒有自由發明的語法。
 - [ ] check-llm 的描述具體、要求指出表/欄位、語氣為提問。
-- [ ] 放到正確的 `config/<domain>/{gating,advisory}/` 目錄。
+- [ ] 放到正確的 `config/<domain>/knowhow/{gating,advisory}/` 目錄。
 - [ ] 跑一次 `python run.py`，確認報告沒有「卡控語句無法解析」的警告，
       且這條 skill 出現在預期的區（閘門/顧問）。
 
@@ -256,7 +256,7 @@ Python skill 必須宣告 `id` 與 `domain`。若函式沒有回傳 finding，
 4. 寫卡控區塊：
    - gating → 只用第 3 節清單的動詞組合卡控。
    - advisory → 用第 4 節要點寫自然語言描述。
-5. 用空白範本 `config/templates/skill_gating.template.md` 或
-   `config/templates/skill_advisory.template.md` 當骨架填。
+5. 用空白範本 `config/_engine/templates/skill_gating.template.md` 或
+   `config/_engine/templates/skill_advisory.template.md` 當骨架填。
 6. 存到正確目錄、跑 `python rules.py check` 與 `python run.py`、核對第 7 節清單。
 7. 把產出的 skill 路徑與「它會擋還是只提示、屬於哪一區」回報給使用者。

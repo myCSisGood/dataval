@@ -78,6 +78,80 @@ def checking_rule_summary(findings: list[Finding],
     return out
 
 
+# 涵蓋清單用的結果標籤：把 checking rule ID 摘要反轉成「每條規則 → 結果」。
+_COVERAGE_OUTCOME = {
+    "failed": ("❌ 擋下", "bs-fail"),
+    "warnings": ("⚠️ 警告", "bs-warn"),
+    "passed": ("✅ 通過", "bs-pass"),
+    "not_checked": ("ℹ️ 未實檢／略過", "bs-info"),
+    "advisory": ("💡 顧問", "bs-advisory"),
+}
+
+
+def _rule_outcome_map(findings: list[Finding], meta: dict) -> dict:
+    """rule_id → 結果分類鍵。閘門結果優先於顧問，供涵蓋清單逐條標註。"""
+    crs = checking_rule_summary(findings, meta.get("checking_rule_ids_loaded"))
+    out: dict[str, str] = {}
+    for key in ("failed", "warnings", "passed", "not_checked", "advisory"):
+        for rule_id in crs[key]:
+            out.setdefault(rule_id, key)
+    return out
+
+
+def rule_coverage_lines(meta: dict, findings: list[Finding]) -> list[str]:
+    """規則涵蓋清單（Markdown）：交代 config 每一條規則本次的去向。
+
+    純透明度區塊——不影響合規判定。回答「宣告的域底下每條規則是否都執行、
+    被略過的是哪些、為什麼」。"""
+    cov = meta.get("rule_coverage") or {}
+    if not cov:
+        return []
+    outcomes = _rule_outcome_map(findings, meta)
+    requested = cov.get("requested_domains") or []
+    available = cov.get("available_domains") or []
+    loaded = cov.get("loaded") or []
+    not_loaded = cov.get("not_loaded") or []
+    empty_domains = cov.get("empty_domains") or []
+    lines = ["## 規則涵蓋清單"]
+    lines.append(
+        f"> 宣告域（context.md）：{('、'.join(requested)) or '（未指定，僅 Common）'}"
+        f" · config 可用域：{('、'.join(available)) or '—'}")
+    lines.append(
+        f"> 涵蓋：載入並執行 **{cov.get('rules_loaded_count', 0)}** 條 "
+        f"／ config 共 **{cov.get('rules_total', 0)}** 條")
+    lines.append("")
+
+    lines.append(f"### ✅ 已載入並執行（{len(loaded)} 條）")
+    if loaded:
+        for r in loaded:
+            label = _COVERAGE_OUTCOME.get(outcomes.get(r["id"], "not_checked"),
+                                          _COVERAGE_OUTCOME["not_checked"])[0]
+            lines.append(f"- `{r['id']}`（{r['domain']}）→ {label}")
+    else:
+        lines.append("（無）")
+    lines.append("")
+
+    lines.append(f"### ⏭️ 未載入：所屬域未在 context.md 宣告（{len(not_loaded)} 條）")
+    if not_loaded:
+        by_domain: dict[str, list[str]] = {}
+        for r in not_loaded:
+            by_domain.setdefault(r["domain"], []).append(r["id"])
+        for dom in sorted(by_domain):
+            ids = "、".join(f"`{x}`" for x in by_domain[dom])
+            lines.append(f"- **{dom}**：{ids}")
+        lines.append("> 若這些域也應納入檢查，請在 context.md front-matter 的 "
+                     "`domains` 補上該域後重跑。")
+    else:
+        lines.append("（無——宣告域底下的規則已全數載入）")
+    lines.append("")
+
+    if empty_domains:
+        lines.append("### ⚠️ 空的域（資料夾存在但無任何規則）")
+        lines.append("- " + "、".join(empty_domains))
+        lines.append("")
+    return lines
+
+
 def blocking_summary(findings: list[Finding]) -> dict:
     """依「規則」彙整本次卡控結果：哪些規則把設計卡下來、擋了哪些對象。
 
@@ -145,6 +219,7 @@ def to_json(findings: list[Finding], meta: dict | None = None,
         "summary": summarize(findings),
         "checking_rule_summary": checking_rule_summary(
             findings, meta.get("checking_rule_ids_loaded")),
+        "rule_coverage": meta.get("rule_coverage", {}),
         "blocking_summary": blocking_summary(findings),
         "lineage": meta.get("lineage", {}),
         # Two zones kept as separate sections so the deterministic gating result
@@ -182,6 +257,10 @@ def to_markdown(findings: list[Finding], meta: dict | None = None) -> str:
     if meta:
         lines.append(f"> 方言 {meta.get('dialect')} · 表數 {meta.get('tables')} "
                      f"· 載入 skill {meta.get('skills_loaded', 0)} 條")
+        bundle = (meta.get("validation_manifest") or {}).get(
+            "validation_bundle_code")
+        if bundle:
+            lines.append(f"> 驗證 bundle `{bundle}`（含規則、validator 與依賴版本）")
     lines.append("")
 
     # checking rule ID 總覽：不用指紋，直接呈現各規則的設計級結果。
@@ -194,6 +273,8 @@ def to_markdown(findings: list[Finding], meta: dict | None = None) -> str:
         ids = crs[key]
         lines.append(f"- {label}：" + ("、".join(f"`{x}`" for x in ids) if ids else "（無）"))
     lines.append("")
+
+    lines.extend(rule_coverage_lines(meta, findings))
 
     lineage = meta.get("lineage") or {}
     relationships = lineage.get("relationships") or []
@@ -364,6 +445,58 @@ def _checking_rule_summary_html(findings: list[Finding], meta: dict) -> str:
             + "".join(rows) + "</div>")
 
 
+def _rule_coverage_html(meta: dict, findings: list[Finding]) -> str:
+    """規則涵蓋清單卡片：交代 config 每條規則本次的去向（純透明度，不影響判定）。"""
+    cov = meta.get("rule_coverage") or {}
+    if not cov:
+        return ""
+    outcomes = _rule_outcome_map(findings, meta)
+    requested = cov.get("requested_domains") or []
+    available = cov.get("available_domains") or []
+    loaded = cov.get("loaded") or []
+    not_loaded = cov.get("not_loaded") or []
+    empty_domains = cov.get("empty_domains") or []
+
+    rows = [
+        '<div class="bs-row"><span class="bs-t">宣告域（context.md）：'
+        f'{_esc("、".join(requested) or "（未指定，僅 Common）")} · config 可用域：'
+        f'{_esc("、".join(available) or "—")}</span></div>',
+        '<div class="bs-row"><span class="bs-title">已載入並執行 '
+        f'{_esc(cov.get("rules_loaded_count", 0))} 條</span>'
+        f'<span class="bs-t">／ config 共 {_esc(cov.get("rules_total", 0))} 條</span></div>',
+    ]
+    for r in loaded:
+        label, css = _COVERAGE_OUTCOME.get(
+            outcomes.get(r["id"], "not_checked"), _COVERAGE_OUTCOME["not_checked"])
+        rows.append(
+            f'<div class="bs-row"><span class="bs-dot {css}"></span>'
+            f'<a href="#" onclick="filterRule(\'{_esc(r["id"])}\');return false" '
+            f'class="mono bs-rule">{_esc(r["id"])}</a>'
+            f'<span class="bs-t">{_esc(r["domain"])}</span>'
+            f'<span class="bs-t">{_esc(label)}</span></div>')
+
+    if not_loaded:
+        by_domain: dict[str, list[str]] = {}
+        for r in not_loaded:
+            by_domain.setdefault(r["domain"], []).append(r["id"])
+        detail = "；".join(
+            f"{_esc(dom)}：" + "、".join(_esc(x) for x in by_domain[dom])
+            for dom in sorted(by_domain))
+        rows.append(
+            '<div class="bs-row"><span class="bs-dot bs-info"></span>'
+            f'<span class="bs-title">未載入（域未宣告）{len(not_loaded)} 條</span>'
+            f'<span class="bs-t">{detail} — 若應納入，請在 context.md 的 domains 補上</span></div>')
+    if empty_domains:
+        rows.append(
+            '<div class="bs-row"><span class="bs-dot bs-warn"></span>'
+            '<span class="bs-title">空的域（無任何規則）</span>'
+            f'<span class="bs-t">{_esc("、".join(empty_domains))}</span></div>')
+
+    return ('<div class="bsum"><div class="bs-head">規則涵蓋清單'
+            '<span class="bs-hint">（config 每條規則的去向；純透明度，不影響判定）</span></div>'
+            + "".join(rows) + "</div>")
+
+
 def _advisory_state_html(meta: dict, findings: list[Finding]) -> str:
     """Describe whether the advisory zone has real suggestions or is pending."""
     pending = [f for f in findings
@@ -384,6 +517,8 @@ def to_html(findings: list[Finding], meta: dict | None = None) -> str:
     verdict_txt = "合規" if verdict_ok else "不合規"
     gen = _generated_at()
     domains = "、".join(meta.get("domains_loaded", [])) or "—"
+    bundle = (meta.get("validation_manifest") or {}).get(
+        "validation_bundle_code", "—")
 
     # build rows grouped by category
     cats_html = []
@@ -529,6 +664,7 @@ def to_html(findings: list[Finding], meta: dict | None = None) -> str:
   <div class="verdict {verdict_class}">{'✅' if verdict_ok else '❌'} 判定：{verdict_txt}（會擋項目 {s['blocking_count']}）</div>
 
   {_checking_rule_summary_html(findings, meta)}
+  {_rule_coverage_html(meta, findings)}
   {_blocking_summary_html(findings)}
 
   <div class="cards">
@@ -542,6 +678,7 @@ def to_html(findings: list[Finding], meta: dict | None = None) -> str:
   </div>
   <div class="meta">方言 {_esc(meta.get('dialect','—'))} · 表數 {_esc(meta.get('tables','—'))}
     · 載入 skill {_esc(meta.get('skills_loaded',0))} 條 · domain：{_esc(domains)}
+    · 驗證 bundle：<span class="mono">{_esc(bundle)}</span>
     <br><span style="color:var(--muted)">合規結果直接以 checking rule ID 呈現，不使用指紋或結果碼。</span></div>
 
   <div class="zones">

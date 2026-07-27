@@ -1,8 +1,9 @@
 """輸入前置檢核（pre-flight gate）的守門測試。
 
 守的保證：
-  P1 四件齊全且一致 → 通過，載入結果可直接餵引擎
-  P2 任一件缺漏/不可解析/不一致 → 不通過（不產報告）
+  P1 三件必備齊全且一致 → 通過，載入結果可直接餵引擎
+  P2 必備件（DDL／relations／context）缺漏/不可解析/不一致 → 不通過（不產報告）
+  P2b 樣本為選填：缺樣本或樣本有問題 → 不擋報告，只降為警告並略過該表
   P3 宣告基數與樣本矛盾 → 產出會擋的 Finding（隨報告輸出）
   P4 CSV 轉型慣例（空=NULL、布林、整數/小數、前導零保留字串）
 """
@@ -133,22 +134,42 @@ class T_P2_MissingOrBrokenInputBlocks(PrecheckCase):
         return {i.label for i in r.items if not i.ok}
 
     def test_missing_everything(self):
+        # 樣本為選填：全空時只有兩件必備（關聯、語意描述）擋，樣本不擋。
         r = precheck.run_precheck(self.ddl)
         self.assertFalse(r.passed)
-        self.assertEqual({"樣本資料", "關聯", "語意描述"}, self.failed_labels(r))
+        self.assertEqual({"關聯", "語意描述"}, self.failed_labels(r))
+        self.assertTrue(any("samples" in w for w in r.warnings))
 
-    def test_missing_one_table_csv(self):
+    def test_missing_all_samples_still_passes(self):
+        # 三件必備齊全、完全沒給 samples/ → 仍通過並產報告。
+        self.complete()
+        shutil.rmtree(os.path.join(self.dir, "order.samples"))
+        r = precheck.run_precheck(self.ddl)
+        self.assertTrue(r.passed, [i.detail for i in r.items if not i.ok])
+        self.assertEqual({}, r.samples)
+        self.assertNotIn("樣本資料", self.failed_labels(r))
+
+    def test_missing_one_table_csv_warns_not_blocks(self):
+        # 只涵蓋部分表 → 不擋；有樣本的表照載，缺的表以警告帶過。
         self.complete()
         os.remove(os.path.join(self.dir, "order.samples", "order_items.csv"))
         r = precheck.run_precheck(self.ddl)
-        self.assertIn("樣本資料", self.failed_labels(r))
+        self.assertTrue(r.passed, [i.detail for i in r.items if not i.ok])
+        self.assertNotIn("樣本資料", self.failed_labels(r))
+        self.assertIn("orders", r.samples)
+        self.assertNotIn("order_items", r.samples)
+        self.assertTrue(any("order_items" in w for w in r.warnings))
 
-    def test_csv_header_not_in_ddl(self):
+    def test_csv_header_not_in_ddl_warns_not_blocks(self):
+        # 提供的 CSV 表頭有 DDL 沒有的欄位 → 該表樣本略過並警告，不擋報告。
         self.complete()
         write(os.path.join(self.dir, "order.samples", "orders.csv"),
               "order_id,ghost_column\n1,x\n")
         r = precheck.run_precheck(self.ddl)
-        self.assertIn("樣本資料", self.failed_labels(r))
+        self.assertTrue(r.passed, [i.detail for i in r.items if not i.ok])
+        self.assertNotIn("樣本資料", self.failed_labels(r))
+        self.assertNotIn("orders", r.samples)  # 壞掉的表樣本被略過
+        self.assertTrue(any("ghost_column" in w for w in r.warnings))
 
     def test_multi_table_requires_relation(self):
         self.complete()
@@ -176,6 +197,21 @@ class T_P2_MissingOrBrokenInputBlocks(PrecheckCase):
         self.complete()
         write(os.path.join(self.dir, "order.context.md"),
               "---\nsubject: 訂單\n---\n## 這個 data subject 是什麼\n訂單。\n")
+        r = precheck.run_precheck(self.ddl)
+        self.assertIn("語意描述", self.failed_labels(r))
+
+    def test_business_key_value_must_be_nonempty_list(self):
+        self.complete()
+        write(os.path.join(self.dir, "order.context.md"),
+              CONTEXT_OK.replace("orders: [order_id]", "orders: order_id"))
+        r = precheck.run_precheck(self.ddl)
+        self.assertIn("語意描述", self.failed_labels(r))
+
+    def test_business_key_table_and_columns_must_exist(self):
+        self.complete()
+        invalid = CONTEXT_OK.replace(
+            "orders: [order_id]", "ghost: [id]\n  orders: [missing_id]")
+        write(os.path.join(self.dir, "order.context.md"), invalid)
         r = precheck.run_precheck(self.ddl)
         self.assertIn("語意描述", self.failed_labels(r))
 

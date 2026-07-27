@@ -100,7 +100,7 @@ def parse_ddl(ddl: str, dialect: str = "clickhouse",
                         ref_cols = [c.name for c in ref.find_all(exp.Column)]
                         table.foreign_keys.append(ForeignKey(cols, ref_tbl, ref_cols))
 
-        # Business identity must be declared in config/cases metadata. Neither
+        # Business identity must be declared in context/case metadata. Neither
         # ClickHouse ORDER BY nor PRIMARY KEY guarantees business uniqueness.
         declared_business_key = business_keys.get(table.name)
         if isinstance(declared_business_key, list):

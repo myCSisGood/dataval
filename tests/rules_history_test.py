@@ -21,7 +21,7 @@ from dataval import rules_history  # noqa: E402
 
 
 def payload(rules):
-    return json.dumps({"format": "dataval.compiled_rules.v2",
+    return json.dumps({"format": "dataval.compiled_rules.v3",
                        "rule_count": len(rules), "rules": rules,
                        "domains": ["Common"]}, ensure_ascii=False)
 

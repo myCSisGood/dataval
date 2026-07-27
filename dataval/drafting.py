@@ -30,6 +30,7 @@ adopt 之後，下一次 run.py 的規則版控（rules_history/）會自動記�
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timezone
 
 import yaml
@@ -132,6 +133,12 @@ def build_prompt(rule_id: str, zone: str, description: str) -> tuple[str, str]:
 def create_draft(drafts_dir: str, domain: str, zone: str, rule_id: str,
                  description: str, llm=None) -> tuple[str, str]:
     """起草。回傳 (產出檔路徑, 模式)；模式為 'llm' 或 'prompt'。"""
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", rule_id or ""):
+        raise SystemExit("rule_id 必須是小寫英數底線")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", domain or ""):
+        raise SystemExit("domain 只能包含英數、底線或連字號")
+    if zone not in ("gating", "advisory"):
+        raise SystemExit("zone 必須是 gating 或 advisory")
     os.makedirs(drafts_dir, exist_ok=True)
     existing = load_meta(drafts_dir, rule_id)
     if existing and existing.get("status") == "pending":
@@ -173,6 +180,14 @@ def adopt_draft(drafts_dir: str, domain_root: str, rule_id: str,
     meta = load_meta(drafts_dir, rule_id)
     if meta is None:
         raise SystemExit(f"找不到 drafts/{rule_id}.draft.yaml；請先 draft。")
+    domain = str(meta.get("domain", ""))
+    zone = str(meta.get("zone", ""))
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", rule_id or ""):
+        raise SystemExit("rule_id 必須是小寫英數底線")
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", domain):
+        raise SystemExit("草稿 domain 無效")
+    if zone not in ("gating", "advisory"):
+        raise SystemExit("草稿 zone 無效")
     src = os.path.join(drafts_dir, f"{rule_id}.md")
     if not os.path.isfile(src):
         raise SystemExit(f"找不到草稿 drafts/{rule_id}.md"
@@ -186,8 +201,7 @@ def adopt_draft(drafts_dir: str, domain_root: str, rule_id: str,
     if problems:
         raise SystemExit("草稿未通過 lint，仍留在 drafts/：\n  - "
                          + "\n  - ".join(problems))
-    dest_dir = os.path.join(domain_root, meta["domain"], "knowhow",
-                            meta["zone"])
+    dest_dir = os.path.join(domain_root, domain, "knowhow", zone)
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(dest_dir, f"{rule_id}.md")
     if os.path.isfile(dest):

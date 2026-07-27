@@ -1,6 +1,6 @@
 """E2E 流程（domain flows）。
 
-每個 domain 可在 config/domains/<域>/flows/ 放 `*.flow.yaml`，描述資料
+每個 domain 可在 config/<域>/flows/ 放 `*.flow.yaml`，描述資料
 從來源到消費端的端到端流程。推薦格式（YAML）：
 
     flow: order_to_revenue            # 流程代號

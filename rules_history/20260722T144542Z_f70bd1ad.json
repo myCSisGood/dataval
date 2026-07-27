@@ -1,33 +1,97 @@
 {
- "domains": [
-  "BLM",
-  "CRM",
-  "Common",
-  "FCM",
-  "PLM",
-  "SCM"
- ],
- "format": "dataval.compiled_rules.v3",
- "implementation": {
-  "dependencies": {
-   "PyYAML": "6.0.3",
-   "sqlglot": "30.13.0"
-  },
-  "files": {
-   "dataval/engine.py": "3721e06cdad63bfcaaa8fd61c849809c9192d7f026d66e5d54f049e289a0fa77",
-   "dataval/flows.py": "cd3daf2472701cbaa35b8179eb1fd23c2139d833b58bfcdf23d209a1f345faa8",
-   "dataval/lineage.py": "e69a56e3230e38e93e2d85d80a47076b45ef574a74c0e50534cca6ff6ae5962f",
-   "dataval/model.py": "3d97b3056a3bcc0d57fd9774625ed42c44f814eafbf9888901b3dde449090491",
-   "dataval/parser.py": "5b8d31988770ec45ea81795b7652f3e00e0519c17a2a423d8424b26825d945cb",
-   "dataval/precheck.py": "c4ef763f714d52d1de2ead501f2de991e49f03949c79ae6175c80beaea9767c5",
-   "dataval/prodgraph.py": "12b10d6d969b99c1c2b8850fbbe6a3b21c1bdc017242aecf5bff5ff5f657cc77",
-   "dataval/production.py": "8888b0365c03555a7d0f2ca99965c07907cfce92057e873ff6bffde05e552f43",
-   "dataval/skills/__init__.py": "9fe67bb469a2e0e054c7827ab2f8e58f49edf9c446ccfa509a012af382ddcdfe",
-   "dataval/skills/markdown_skill.py": "ee2b5ca40a32091b1a50888b2f1badfd8edf0f71ad6cde15fd68f05d6008d805",
-   "dataval/subject_inference.py": "fa2270cb693912bef74d55d3712ae1a6408a6a2c514ef5c3e3451af640a9bb9f"
-  }
- },
+ "recorded_at": "2026-07-22T14:45:42+00:00",
+ "rule_version_code": "f70bd1adfb9f71ef",
+ "previous_code": "e4233a9950048118",
  "rule_count": 39,
+ "added": [],
+ "removed": [],
+ "changed": [
+  {
+   "id": "no_future_event_time",
+   "domain": "Common",
+   "zone": "gating",
+   "category": "best_practice",
+   "enforcement": "python",
+   "title": "Imperative skill: event_time-like columns should not allow obviously wrong",
+   "fields": {
+    "source_sha256": {
+     "from": null,
+     "to": "f60f7210b6cb91b734de1254f9b06bce74b3ed1f1f7589a2e6ad6ed469270b6c"
+    }
+   }
+  },
+  {
+   "id": "ssot_authority",
+   "domain": "Common",
+   "zone": "gating",
+   "category": "ssot",
+   "enforcement": "python",
+   "title": "SSOT 權威唯一性（依 registry，跨表）— 由舊 SSOT.AUTHORITY_* 搬遷。",
+   "fields": {
+    "source_sha256": {
+     "from": null,
+     "to": "f24631f6484ab35c0408f8e4e0035c0fdc4236e7af12598e107d8d2c80383e57"
+    }
+   }
+  },
+  {
+   "id": "ssot_fact_duplication",
+   "domain": "Common",
+   "zone": "gating",
+   "category": "ssot",
+   "enforcement": "python",
+   "title": "同一事實不可散落多表（依 attribute_owner）— 由舊 SSOT.FACT_DUPLICATION 搬遷。",
+   "fields": {
+    "source_sha256": {
+     "from": null,
+     "to": "f2133a5497e0460cdfb6b63e1020b677cda4e3cfe17fa2685e78bce3f73b5005"
+    }
+   }
+  },
+  {
+   "id": "ssot_join_keys",
+   "domain": "Common",
+   "zone": "gating",
+   "category": "ssot",
+   "enforcement": "python",
+   "title": "跨表 join key 相容性（型別＋樣本編碼）— 由舊 SSOT.JOIN_KEY_* 搬遷。",
+   "fields": {
+    "source_sha256": {
+     "from": null,
+     "to": "0bed1da87b0211ebc78269e3b651e2630d19c8f24bcdf9ed7566adc58e2d8a95"
+    }
+   }
+  },
+  {
+   "id": "structural_fk_resolves",
+   "domain": "Common",
+   "zone": "gating",
+   "category": "structural",
+   "enforcement": "python",
+   "title": "FK 目標必須存在（跨表）— 由舊 STRUCT.FK_RESOLVES 搬遷。",
+   "fields": {
+    "source_sha256": {
+     "from": null,
+     "to": "633a0182f32a25e8f83faeec318cc792327f4ed51a043ecc0a24c53daf81eca5"
+    }
+   }
+  },
+  {
+   "id": "structural_type_sample",
+   "domain": "Common",
+   "zone": "gating",
+   "category": "structural",
+   "enforcement": "python",
+   "title": "宣告型別 vs 樣本資料一致（需樣本）— 由舊 STRUCT.TYPE_SAMPLE_MATCH 搬遷。",
+   "fields": {
+    "source_sha256": {
+     "from": null,
+     "to": "a69451060ddd66270bce2d91d8d76d2c8c0a38c1f344befc5fd36964c23b92ef"
+    }
+   }
+  }
+ ],
+ "snapshot_file": "20260722T144542Z_f70bd1ad.json",
  "rules": [
   {
    "applies_to": {
@@ -758,5 +822,25 @@
    "unparsed": [],
    "zone": "advisory"
   }
- ]
+ ],
+ "implementation": {
+  "dependencies": {
+   "PyYAML": "6.0.3",
+   "sqlglot": "30.12.0"
+  },
+  "files": {
+   "dataval/engine.py": "599c56d810d4e0c1615689cbd5617d6fc5bd1386a3c041a7c621da0cab527d24",
+   "dataval/flows.py": "cd3daf2472701cbaa35b8179eb1fd23c2139d833b58bfcdf23d209a1f345faa8",
+   "dataval/lineage.py": "e69a56e3230e38e93e2d85d80a47076b45ef574a74c0e50534cca6ff6ae5962f",
+   "dataval/model.py": "3d97b3056a3bcc0d57fd9774625ed42c44f814eafbf9888901b3dde449090491",
+   "dataval/parser.py": "5b8d31988770ec45ea81795b7652f3e00e0519c17a2a423d8424b26825d945cb",
+   "dataval/precheck.py": "6cf36a1e57b98ac77a3ab82cce1439a6cf6a2c056efd5e598edfb28bb223e40e",
+   "dataval/prodgraph.py": "12b10d6d969b99c1c2b8850fbbe6a3b21c1bdc017242aecf5bff5ff5f657cc77",
+   "dataval/production.py": "8888b0365c03555a7d0f2ca99965c07907cfce92057e873ff6bffde05e552f43",
+   "dataval/skills/__init__.py": "e43da260e8a33e9fcdad06a7658438501dd4bab12a6b90f1f12d12dd4899d3b8",
+   "dataval/skills/markdown_skill.py": "ee2b5ca40a32091b1a50888b2f1badfd8edf0f71ad6cde15fd68f05d6008d805",
+   "dataval/subject_inference.py": "fa2270cb693912bef74d55d3712ae1a6408a6a2c514ef5c3e3451af640a9bb9f"
+  }
+ },
+ "implementation_changed": true
 }

@@ -1,19 +1,62 @@
 # 資料設計驗證報告
-_產生時間 2026-07-25T09:06:54.370287Z_<br>
+_產生時間 2026-07-27T16:09:31.650984Z_<br>
 **判定：❌ 不合規**（會擋項目 11）<br>
-通過 25 · 警告 12 · 失敗 11 · 略過 6 · 提示 1<br>
-閘門區 50 項 · 顧問區 5 項<br>
+通過 25 · 警告 12 · 失敗 11 · 略過 6 · 提示 0<br>
+閘門區 50 項 · 顧問區 4 項<br>
 > 方言 clickhouse · 表數 3 · 載入 skill 26 條
+> 驗證 bundle `44c8505165ab5c65`（含規則、validator 與依賴版本）
 
 ## Checking rule ID 摘要
 - ❌ 擋下：`LINEAGE.TYPE_COMPATIBILITY`、`SKILL.bp_money_decimal`、`SKILL.bp_no_float`、`SKILL.naming_column_case`、`SKILL.naming_columns_commented`、`SKILL.ssot_authority`、`SKILL.ssot_join_keys`
 - ⚠️ 警告：`DOMAIN.SCOPE`、`SKILL.bp_datetime_timezone`、`SKILL.ssot_fact_duplication`、`SKILL.ssot_pii_amount_split`、`SKILL.structural_audit_columns`、`SSOT.UNREGISTERED_SUBJECT`
 - ✅ 通過：`BUSINESS_KEY.METADATA`、`LINEAGE.COLUMN_EXISTS`、`LINEAGE.CYCLE`、`LINEAGE.DOMAIN_SCOPE`、`LINEAGE.METADATA`、`LINEAGE.UPSTREAM_EXISTS`、`PRODGRAPH.CARDINALITY_CONFLICT`、`PRODGRAPH.CYCLE`、`SKILL.bp_lowcardinality_status`、`SKILL.naming_glossary`、`SKILL.naming_identifier_length`、`SKILL.naming_pk_suffix`、`SKILL.naming_reserved_words`、`SKILL.naming_table_snake_case`、`SKILL.no_future_event_time`、`SKILL.structural_business_key`、`SKILL.structural_engine_mergetree`、`SKILL.structural_key_not_nullable`、`SKILL.structural_order_by`、`SKILL.structural_type_sample`
 - ℹ️ 未實檢／略過：`PRODUCTION.SCOPE`、`SKILL.structural_fk_resolves`
-- 💡 顧問：`CONCEPT.SUBJECT`、`PRODGRAPH.IMPACT`、`SKILL.best_practice_semantic`、`SKILL.naming_semantic`、`SKILL.ssot_semantic`
+- 💡 顧問：`CONCEPT.SUBJECT`、`SKILL.best_practice_semantic`、`SKILL.naming_semantic`、`SKILL.ssot_semantic`
+
+## 規則涵蓋清單
+> 宣告域（context.md）：（未指定，僅 Common） · config 可用域：BLM、CRM、Common、FCM、PLM、SCM
+> 涵蓋：載入並執行 **26** 條 ／ config 共 **39** 條
+
+### ✅ 已載入並執行（26 條）
+- `SKILL.best_practice_semantic`（Common）→ 💡 顧問
+- `SKILL.bp_datetime_timezone`（Common）→ ⚠️ 警告
+- `SKILL.bp_lowcardinality_status`（Common）→ ✅ 通過
+- `SKILL.bp_money_decimal`（Common）→ ❌ 擋下
+- `SKILL.bp_no_float`（Common）→ ❌ 擋下
+- `SKILL.naming_column_case`（Common）→ ❌ 擋下
+- `SKILL.naming_columns_commented`（Common）→ ❌ 擋下
+- `SKILL.naming_glossary`（Common）→ ✅ 通過
+- `SKILL.naming_identifier_length`（Common）→ ✅ 通過
+- `SKILL.naming_pk_suffix`（Common）→ ✅ 通過
+- `SKILL.naming_reserved_words`（Common）→ ✅ 通過
+- `SKILL.naming_semantic`（Common）→ 💡 顧問
+- `SKILL.naming_table_snake_case`（Common）→ ✅ 通過
+- `SKILL.no_future_event_time`（Common）→ ✅ 通過
+- `SKILL.ssot_authority`（Common）→ ❌ 擋下
+- `SKILL.ssot_fact_duplication`（Common）→ ⚠️ 警告
+- `SKILL.ssot_join_keys`（Common）→ ❌ 擋下
+- `SKILL.ssot_pii_amount_split`（Common）→ ⚠️ 警告
+- `SKILL.ssot_semantic`（Common）→ 💡 顧問
+- `SKILL.structural_audit_columns`（Common）→ ⚠️ 警告
+- `SKILL.structural_business_key`（Common）→ ✅ 通過
+- `SKILL.structural_engine_mergetree`（Common）→ ✅ 通過
+- `SKILL.structural_fk_resolves`（Common）→ ℹ️ 未實檢／略過
+- `SKILL.structural_key_not_nullable`（Common）→ ✅ 通過
+- `SKILL.structural_order_by`（Common）→ ✅ 通過
+- `SKILL.structural_type_sample`（Common）→ ✅ 通過
+
+### ⏭️ 未載入：所屬域未在 context.md 宣告（13 條）
+- **BLM**：`SKILL.blm_baseline`
+- **FCM**：`SKILL.fcm_baseline`、`SKILL.fcm_master_data_semantic`
+- **PLM**：`SKILL.plm_bom_needs_quantity`、`SKILL.plm_bom_structural_integrity`、`SKILL.plm_engineering_change`、`SKILL.plm_lifecycle_stage`、`SKILL.plm_part_master_baseline`、`SKILL.plm_revision_versioning`
+- **SCM**：`SKILL.scm_grn_needs_po`、`SKILL.scm_po_needs_supplier`、`SKILL.scm_supplier_baseline`、`SKILL.scm_supply_semantic`
+> 若這些域也應納入檢查，請在 context.md front-matter 的 `domains` 補上該域後重跑。
+
+### ⚠️ 空的域（資料夾存在但無任何規則）
+- CRM
 
 ## Lineage 關聯
-> 關係來自 case config 的 lineage；這是設計宣告，不代表已觀測到執行血緣。
+> 關係來自 relations.yaml；這是設計宣告，不代表已觀測到執行血緣。
 
 | 來源 | 目標 | 欄位映射 | 性質 |
 |---|---|---|---|
@@ -44,7 +87,7 @@ _產生時間 2026-07-25T09:06:54.370287Z_<br>
 
 | | 區 | 檢查 | 對象 | 說明 | 來源 |
 |---|---|---|---|---|---|
-| ⚠️ | 閘門 | `DOMAIN.SCOPE` | `(domains)` | 未指定 domain，依安全預設只載入 Common。 <br>**期望** 在 config/cases/<DDL名>.yaml 明確指定業務 domain ｜ **實際** 未指定 <br>**修法** 新增 domains；若確定只需共用規則可保持現狀 | rule |
+| ⚠️ | 閘門 | `DOMAIN.SCOPE` | `(domains)` | 未指定 domain，依安全預設只載入 Common。 <br>**期望** 在 context.md front-matter 明確指定業務 domain ｜ **實際** 未指定 <br>**修法** 新增 domains；若確定只需共用規則可保持現狀 | rule |
 | ⚠️ | 閘門 | `SKILL.structural_audit_columns` | `billing_event` | 表應有稽核欄位（created_at / updated_at）：缺少必要欄位 'created_at'；缺少必要欄位 'updated_at' <br>**期望** 表上有欄位 created_at；表上有欄位 updated_at ｜ **實際** 欄位不存在 <br>**修法** 新增欄位 created_at；新增欄位 updated_at <br>_理由：稽核欄位支撐血緣追蹤與變更歷史。_ | skill |
 | ⚠️ | 閘門 | `SKILL.structural_audit_columns` | `subscription` | 表應有稽核欄位（created_at / updated_at）：缺少必要欄位 'updated_at' <br>**期望** 表上有欄位 updated_at ｜ **實際** 欄位不存在 <br>**修法** 新增欄位 updated_at <br>_理由：稽核欄位支撐血緣追蹤與變更歷史。_ | skill |
 | ⏭️ | 閘門 | `SKILL.structural_fk_resolves` | `(schema)` | structural_fk_resolves：本次 schema 沒有可檢查的 FK。 | skill |
@@ -116,11 +159,10 @@ _產生時間 2026-07-25T09:06:54.370287Z_<br>
 | | 區 | 檢查 | 對象 | 說明 | 來源 |
 |---|---|---|---|---|---|
 | ❌ | 閘門 | `LINEAGE.TYPE_COMPATIBILITY` | `local.dim_customer.customer_id → subscription.customer_id` | lineage 來源與目標欄位型別不相容。 <br>**期望** 目標基本型別 int ｜ **實際** 目標基本型別 string <br>**修法** 調整目標型別或改正 lineage 欄位映射。 | rule |
-| ℹ️ | 顧問 | `PRODGRAPH.IMPACT` | `dim_customer` | 正式區有 1 處依賴此表：CRM/order（orders.customer_id）。此表的結構或語意變更會影響這些 subject。 <br>**修法** 變更前通知依賴方；破壞性變更應開新表版本而非原地修改。 | rule |
 | ✅ | 閘門 | `LINEAGE.COLUMN_EXISTS` | `(lineage)` | 所有 lineage 欄位映射都可解析。 | rule |
 | ✅ | 閘門 | `LINEAGE.CYCLE` | `(lineage)` | local lineage 未形成循環。 | rule |
 | ✅ | 閘門 | `LINEAGE.DOMAIN_SCOPE` | `(lineage)` | 所有外部上游 domain 都已明確選取。 | rule |
-| ✅ | 閘門 | `LINEAGE.METADATA` | `(lineage)` | case config 的 lineage 格式與目標表有效。 | rule |
+| ✅ | 閘門 | `LINEAGE.METADATA` | `(lineage)` | relations.yaml 的 lineage 格式與目標表有效。 | rule |
 | ✅ | 閘門 | `LINEAGE.UPSTREAM_EXISTS` | `(lineage)` | 所有宣告的上游資料表都存在。 | rule |
 | ✅ | 閘門 | `PRODGRAPH.CARDINALITY_CONFLICT` | `(全域關聯圖)` | 關聯宣告與正式區既有 subject 的基數一致。 | rule |
 | ✅ | 閘門 | `PRODGRAPH.CYCLE` | `(全域關聯圖)` | 加入本 subject 後全域關聯圖無循環。 | rule |

@@ -11,7 +11,7 @@ sys.path.insert(0, ROOT)
 
 from dataval import report_paths
 from dataval.report import diff_findings
-from dataval.prodgraph import export_graph
+from dataval.graph_export import export_graph
 from dataval.advisory_export import build_advisory_prompt
 from dataval.parser import parse_ddl
 
@@ -90,10 +90,11 @@ class TestExportGraph(unittest.TestCase):
                 '    cardinality: "N:1"\n')
             g = export_graph(prod)
             ids = {n["id"] for n in g["nodes"]}
-            self.assertEqual({"parent", "child"}, ids)
-            self.assertEqual("CRM", next(n for n in g["nodes"] if n["id"] == "parent")["domain"])
+            # node id 為 domain 限定的 "<domain>.<table>"（與 _endpoint_key 一致）
+            self.assertEqual({"crm.parent", "crm.child"}, ids)
+            self.assertEqual("CRM", next(n for n in g["nodes"] if n["id"] == "crm.parent")["domain"])
             # 資料方向：上游(parent, 「1」的一方) → 下游(child)
-            self.assertIn({"from": "parent", "to": "child"}, g["edges"])
+            self.assertIn({"from": "crm.parent", "to": "crm.child"}, g["edges"])
 
     def test_domain_filter(self):
         with tempfile.TemporaryDirectory() as prod:
@@ -105,16 +106,13 @@ class TestExportGraph(unittest.TestCase):
 
 
 class TestAdvisoryPromptPath(unittest.TestCase):
-    def test_prompt_uses_engine_schema_path_and_inlines_rules(self):
+    def test_prompt_uses_engine_schema_path(self):
         schema = parse_ddl("CREATE TABLE t (id UInt64 COMMENT 'x') "
                            "ENGINE=MergeTree ORDER BY id")
         prompt = build_advisory_prompt(schema, "ctx", name="case")
+        # advisory schema 路徑必須指向 _engine/（曾是漏 _engine/ 的 bug）
         self.assertIn("config/_engine/advisory_result.schema.json", prompt)
-        # 不再出現漏了 _engine/ 的舊路徑
         self.assertNotIn("`config/advisory_result.schema.json`", prompt)
-        # 驗證規則已內嵌（不是只說「符合 schema」）
-        self.assertIn("剛好", prompt)
-        self.assertIn("非空字串", prompt)
 
 
 if __name__ == "__main__":

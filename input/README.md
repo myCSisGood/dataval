@@ -1,17 +1,19 @@
-# input/ — 輸入契約（一個 data subject 一組四件）
+# input/ — 輸入契約（一個 data subject：三件必備＋樣本選填）
 
-**一個 data subject 一個資料夾**，資料夾名 = subject 名，四件都要有，
-缺任一件就不會產生報告（`run.py` 會先做前置檢核並印出缺件明細，
-同時留檔 `reports/<名>.precheck.md`）。整包資料夾交付即可。
+**一個 data subject 一個資料夾**，資料夾名 = subject 名。三件必備
+（DDL／relations／context）缺任一件就不會產生報告（`run.py` 會先做前置檢核
+並印出缺件明細，同時留檔 `reports/<名>.precheck.md`）。**樣本 `samples/` 是選填**——
+沒有樣本仍會產生報告，只是樣本相關檢查（型別對樣本、join key 編碼一致、
+基數實檢）因無資料而略過。整包資料夾交付即可。
 
 ```text
 input/
   <名>/
-    <名>.sql            DDL（ClickHouse；可含多張 CREATE TABLE）
-    samples/            樣本資料資料夾
+    <名>.sql            DDL（ClickHouse；可含多張 CREATE TABLE）  ← 必備
+    relations.yaml      表間關聯（join 關係與基數）              ← 必備
+    context.md          這個 data subject 的語意描述            ← 必備
+    samples/            樣本資料資料夾                          ← 選填
       <表名>.csv        DDL 的每張表各一份，檔名 = 表名
-    relations.yaml      表間關聯（join 關係與基數）
-    context.md          這個 data subject 的語意描述
 ```
 
 範例請直接看本資料夾的 `order/`（完整參考範例）與 `subscription/`
@@ -25,9 +27,11 @@ input/
 - ClickHouse 語法，可含多張 `CREATE TABLE`
 - 建議：每個欄位都寫 `COMMENT`（`naming_columns_commented` 是會擋的規則）
 
-## ② 樣本資料 — `samples/<表名>.csv`
+## ② 樣本資料 — `samples/<表名>.csv`（選填）
 
-- **DDL 的每張表都要有一份**；檔名必須等於表名
+- **選填**：整個 `samples/` 可不提供，或只提供部分表；缺樣本的表其樣本相關檢查
+  （型別對樣本、join key 編碼、基數實檢）會略過，不擋報告，只在前置檢核列警告。
+- 有提供就要對得上：檔名必須等於表名
 - 首列 = 表頭，欄名須與 DDL 一致（snake_case）；表頭欄名不可出現 DDL 沒有的欄位
   （允許只給部分欄位）
 - 編碼 UTF-8；**空格子 = NULL**（CSV 無法區分空字串與 NULL，一律視為 NULL）
@@ -86,12 +90,13 @@ business_keys:                 # 選填：各表的業務識別鍵
 
 | 層 | 檢查內容 |
 |---|---|
-| 存在性 | 四件齊全；DDL 每張表都有對應 CSV |
-| 可解析性 | DDL 可 parse；CSV 表頭可讀；YAML 語法正確；context 有必填段落 |
-| 一致性 | CSV 欄名 ⊆ DDL 欄位；relations 端點存在；cardinality 值合法 |
+| 存在性 | 三件必備齊全（DDL／relations／context）；樣本選填，缺樣本不擋 |
+| 可解析性 | DDL 可 parse；（有提供時）CSV 表頭可讀；YAML 語法正確；context 有必填段落 |
+| 一致性 | （有提供時）CSV 欄名 ⊆ DDL 欄位；relations 端點存在；cardinality 值合法 |
 
-任何一層不過 → 該 DDL 跳過不產報告（其他齊全的照跑），`run.py` 以
-exit code 2 結束，缺件明細寫入 `reports/<名>.precheck.md`。
+必備件任一層不過 → 該 DDL 跳過不產報告（其他齊全的照跑），`run.py` 以
+exit code 2 結束，缺件明細寫入 `reports/<名>.precheck.md`。樣本缺漏或某份 CSV
+有問題 → 不擋報告，只在前置檢核列警告並略過該表的樣本。
 
 > 相容模式：`DATAVAL_PRECHECK=legacy` 可暫時回到舊的
 > `config/cases/<名>.yaml` 集中式輸入（供內部測試 fixtures 使用，不建議新案採用）。

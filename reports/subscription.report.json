@@ -33,21 +33,6 @@
       },
       {
         "actual": "",
-        "category": "lineage",
-        "check_id": "PRODGRAPH.IMPACT",
-        "evidence": null,
-        "expected": "",
-        "fix": "變更前通知依賴方；破壞性變更應開新表版本而非原地修改。",
-        "message": "正式區有 1 處依賴此表：CRM/order（orders.customer_id）。此表的結構或語意變更會影響這些 subject。",
-        "rationale": "",
-        "severity": "info",
-        "source": "rule",
-        "status": "info",
-        "target": "dim_customer",
-        "zone": "advisory"
-      },
-      {
-        "actual": "",
         "category": "naming",
         "check_id": "SKILL.naming_semantic",
         "evidence": null,
@@ -216,7 +201,6 @@
   "checking_rule_summary": {
     "advisory": [
       "CONCEPT.SUBJECT",
-      "PRODGRAPH.IMPACT",
       "SKILL.best_practice_semantic",
       "SKILL.naming_semantic",
       "SKILL.ssot_semantic"
@@ -464,21 +448,6 @@
     {
       "actual": "",
       "category": "lineage",
-      "check_id": "PRODGRAPH.IMPACT",
-      "evidence": null,
-      "expected": "",
-      "fix": "變更前通知依賴方；破壞性變更應開新表版本而非原地修改。",
-      "message": "正式區有 1 處依賴此表：CRM/order（orders.customer_id）。此表的結構或語意變更會影響這些 subject。",
-      "rationale": "",
-      "severity": "info",
-      "source": "rule",
-      "status": "info",
-      "target": "dim_customer",
-      "zone": "advisory"
-    },
-    {
-      "actual": "",
-      "category": "lineage",
       "check_id": "LINEAGE.COLUMN_EXISTS",
       "evidence": null,
       "expected": "",
@@ -528,7 +497,7 @@
       "evidence": null,
       "expected": "",
       "fix": "",
-      "message": "case config 的 lineage 格式與目標表有效。",
+      "message": "relations.yaml 的 lineage 格式與目標表有效。",
       "rationale": "",
       "severity": "info",
       "source": "rule",
@@ -963,7 +932,7 @@
       "category": "structural",
       "check_id": "DOMAIN.SCOPE",
       "evidence": null,
-      "expected": "在 config/cases/<DDL名>.yaml 明確指定業務 domain",
+      "expected": "在 context.md front-matter 明確指定業務 domain",
       "fix": "新增 domains；若確定只需共用規則可保持現狀",
       "message": "未指定 domain，依安全預設只載入 Common。",
       "rationale": "",
@@ -1328,7 +1297,7 @@
         "evidence": null,
         "expected": "",
         "fix": "",
-        "message": "case config 的 lineage 格式與目標表有效。",
+        "message": "relations.yaml 的 lineage 格式與目標表有效。",
         "rationale": "",
         "severity": "info",
         "source": "rule",
@@ -1733,7 +1702,7 @@
         "category": "structural",
         "check_id": "DOMAIN.SCOPE",
         "evidence": null,
-        "expected": "在 config/cases/<DDL名>.yaml 明確指定業務 domain",
+        "expected": "在 context.md front-matter 明確指定業務 domain",
         "fix": "新增 domains；若確定只需共用規則可保持現狀",
         "message": "未指定 domain，依安全預設只載入 Common。",
         "rationale": "",
@@ -1881,9 +1850,9 @@
     ],
     "note": "確定性檢查，決定合規判定；結果以 checking rule ID 呈現"
   },
-  "generated_at": "2026-07-25T09:06:54.370706Z",
+  "generated_at": "2026-07-27T16:09:31.651482Z",
   "lineage": {
-    "note": "關係來自 case config 的 lineage；這是設計宣告，不代表已觀測到執行血緣。",
+    "note": "關係來自 relations.yaml；這是設計宣告，不代表已觀測到執行血緣。",
     "relationships": [
       {
         "columns": [
@@ -1952,7 +1921,7 @@
       "source": ""
     },
     "lineage": {
-      "note": "關係來自 case config 的 lineage；這是設計宣告，不代表已觀測到執行血緣。",
+      "note": "關係來自 relations.yaml；這是設計宣告，不代表已觀測到執行血緣。",
       "relationships": [
         {
           "columns": [
@@ -1979,6 +1948,382 @@
       ],
       "source": "declared"
     },
+    "rule_coverage": {
+      "available_domains": [
+        "BLM",
+        "CRM",
+        "Common",
+        "FCM",
+        "PLM",
+        "SCM"
+      ],
+      "empty_domains": [
+        "CRM"
+      ],
+      "loaded": [
+        {
+          "category": "best_practice",
+          "domain": "Common",
+          "file": "Common/knowhow/advisory/best_practice_semantic.md",
+          "id": "SKILL.best_practice_semantic",
+          "kind": "check-llm",
+          "title": "依表型態的最佳實踐建議（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "best_practice",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/bp_datetime_timezone.md",
+          "id": "SKILL.bp_datetime_timezone",
+          "kind": "check",
+          "title": "DateTime 應標明時區",
+          "zone": "gating"
+        },
+        {
+          "category": "best_practice",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/bp_lowcardinality_status.md",
+          "id": "SKILL.bp_lowcardinality_status",
+          "kind": "check",
+          "title": "status 欄位須用 LowCardinality（ClickHouse）",
+          "zone": "gating"
+        },
+        {
+          "category": "best_practice",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/bp_money_decimal.md",
+          "id": "SKILL.bp_money_decimal",
+          "kind": "check",
+          "title": "金額欄位必須用 Decimal",
+          "zone": "gating"
+        },
+        {
+          "category": "best_practice",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/bp_no_float.md",
+          "id": "SKILL.bp_no_float",
+          "kind": "check",
+          "title": "不可使用 Float 型別",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_column_case.md",
+          "id": "SKILL.naming_column_case",
+          "kind": "check",
+          "title": "欄位名須為 snake_case 全小寫",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_columns_commented.md",
+          "id": "SKILL.naming_columns_commented",
+          "kind": "check",
+          "title": "所有欄位必須有 COMMENT 註解",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_glossary.md",
+          "id": "SKILL.naming_glossary",
+          "kind": "check",
+          "title": "命名對照詞彙字典",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_identifier_length.md",
+          "id": "SKILL.naming_identifier_length",
+          "kind": "check",
+          "title": "識別字長度不超過 64 字元",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_pk_suffix.md",
+          "id": "SKILL.naming_pk_suffix",
+          "kind": "check",
+          "title": "主鍵欄位建議以 _id 結尾",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_reserved_words.md",
+          "id": "SKILL.naming_reserved_words",
+          "kind": "check",
+          "title": "欄位名避免 SQL 保留字",
+          "zone": "gating"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/advisory/naming_semantic.md",
+          "id": "SKILL.naming_semantic",
+          "kind": "check-llm",
+          "title": "跨表命名語意一致性（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "naming",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/naming_table_snake_case.md",
+          "id": "SKILL.naming_table_snake_case",
+          "kind": "check",
+          "title": "表名須為 snake_case 全小寫",
+          "zone": "gating"
+        },
+        {
+          "category": "best_practice",
+          "domain": "Common",
+          "file": "Common/knowhow_py/no_future_event_time.py",
+          "id": "SKILL.no_future_event_time",
+          "kind": "python",
+          "title": "Imperative skill: event_time-like columns should not allow obviously wrong",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "Common",
+          "file": "Common/knowhow_py/ssot_authority.py",
+          "id": "SKILL.ssot_authority",
+          "kind": "python",
+          "title": "SSOT 權威唯一性（依 registry，跨表）— 由舊 SSOT.AUTHORITY_* 搬遷。",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "Common",
+          "file": "Common/knowhow_py/ssot_fact_duplication.py",
+          "id": "SKILL.ssot_fact_duplication",
+          "kind": "python",
+          "title": "同一事實不可散落多表（依 attribute_owner）— 由舊 SSOT.FACT_DUPLICATION 搬遷。",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "Common",
+          "file": "Common/knowhow_py/ssot_join_keys.py",
+          "id": "SKILL.ssot_join_keys",
+          "kind": "python",
+          "title": "跨表 join key 相容性（型別＋樣本編碼）— 由舊 SSOT.JOIN_KEY_* 搬遷。",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/ssot_pii_amount_split.md",
+          "id": "SKILL.ssot_pii_amount_split",
+          "kind": "check",
+          "title": "個資與金額應分表存放",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "Common",
+          "file": "Common/knowhow/advisory/ssot_semantic.md",
+          "id": "SKILL.ssot_semantic",
+          "kind": "check-llm",
+          "title": "SSOT 候選衝突偵測（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/structural_audit_columns.md",
+          "id": "SKILL.structural_audit_columns",
+          "kind": "check",
+          "title": "表應有稽核欄位（created_at / updated_at）",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/structural_business_key.md",
+          "id": "SKILL.structural_business_key",
+          "kind": "check",
+          "title": "表必須有 Business Key",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/structural_engine_mergetree.md",
+          "id": "SKILL.structural_engine_mergetree",
+          "kind": "check",
+          "title": "明細表引擎須為 MergeTree 系列（ClickHouse）",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow_py/structural_fk_resolves.py",
+          "id": "SKILL.structural_fk_resolves",
+          "kind": "python",
+          "title": "FK 目標必須存在（跨表）— 由舊 STRUCT.FK_RESOLVES 搬遷。",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/structural_key_not_nullable.md",
+          "id": "SKILL.structural_key_not_nullable",
+          "kind": "check",
+          "title": "鍵欄位不可為 Nullable",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow/gating/structural_order_by.md",
+          "id": "SKILL.structural_order_by",
+          "kind": "check",
+          "title": "表必須有 ORDER BY（ClickHouse）",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "Common",
+          "file": "Common/knowhow_py/structural_type_sample.py",
+          "id": "SKILL.structural_type_sample",
+          "kind": "python",
+          "title": "宣告型別 vs 樣本資料一致（需樣本）— 由舊 STRUCT.TYPE_SAMPLE_MATCH 搬遷。",
+          "zone": "gating"
+        }
+      ],
+      "loaded_domains": [
+        "Common"
+      ],
+      "not_loaded": [
+        {
+          "category": "structural",
+          "domain": "BLM",
+          "file": "BLM/knowhow/gating/blm_baseline.md",
+          "id": "SKILL.blm_baseline",
+          "kind": "check",
+          "title": "BLM 領域基線(範例佔位,請以實際 BLM 規範替換)",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "FCM",
+          "file": "FCM/knowhow/gating/fcm_baseline.md",
+          "id": "SKILL.fcm_baseline",
+          "kind": "check",
+          "title": "FCM 領域基線(範例佔位,請以實際 FCM 規範替換)",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "FCM",
+          "file": "FCM/knowhow/advisory/fcm_master_data.md",
+          "id": "SKILL.fcm_master_data_semantic",
+          "kind": "check-llm",
+          "title": "FCM｜主檔語意一致性",
+          "zone": "advisory"
+        },
+        {
+          "category": "structural",
+          "domain": "PLM",
+          "file": "PLM/knowhow/gating/plm_bom_quantity.md",
+          "id": "SKILL.plm_bom_needs_quantity",
+          "kind": "check",
+          "title": "PLM｜BOM 必須記錄用量",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "PLM",
+          "file": "PLM/knowhow/advisory/plm_bom_integrity.md",
+          "id": "SKILL.plm_bom_structural_integrity",
+          "kind": "check-llm",
+          "title": "PLM｜BOM 結構完整性（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "ssot",
+          "domain": "PLM",
+          "file": "PLM/knowhow/advisory/plm_change_management.md",
+          "id": "SKILL.plm_engineering_change",
+          "kind": "check-llm",
+          "title": "PLM｜工程變更管理（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "best_practice",
+          "domain": "PLM",
+          "file": "PLM/knowhow/advisory/plm_lifecycle_stage.md",
+          "id": "SKILL.plm_lifecycle_stage",
+          "kind": "check-llm",
+          "title": "PLM｜生命週期階段（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "structural",
+          "domain": "PLM",
+          "file": "PLM/knowhow/gating/plm_part_master.md",
+          "id": "SKILL.plm_part_master_baseline",
+          "kind": "check",
+          "title": "PLM｜料件主檔基線",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "PLM",
+          "file": "PLM/knowhow/advisory/plm_revision_control.md",
+          "id": "SKILL.plm_revision_versioning",
+          "kind": "check-llm",
+          "title": "PLM｜版次與版本控制（語意）",
+          "zone": "advisory"
+        },
+        {
+          "category": "structural",
+          "domain": "SCM",
+          "file": "SCM/knowhow/gating/scm_grn_needs_po.md",
+          "id": "SKILL.scm_grn_needs_po",
+          "kind": "check",
+          "title": "收貨單必須掛採購單號",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "SCM",
+          "file": "SCM/knowhow/gating/scm_po_needs_supplier.md",
+          "id": "SKILL.scm_po_needs_supplier",
+          "kind": "check",
+          "title": "採購單必須掛供應商(範例)",
+          "zone": "gating"
+        },
+        {
+          "category": "structural",
+          "domain": "SCM",
+          "file": "SCM/knowhow/gating/scm_supplier_baseline.md",
+          "id": "SKILL.scm_supplier_baseline",
+          "kind": "check",
+          "title": "供應商主檔基線(範例,依實際 SCM 規範替換)",
+          "zone": "gating"
+        },
+        {
+          "category": "ssot",
+          "domain": "SCM",
+          "file": "SCM/knowhow/advisory/scm_supply_semantic.md",
+          "id": "SKILL.scm_supply_semantic",
+          "kind": "check-llm",
+          "title": "供應鏈語意檢視(範例,依實際 SCM know-how 替換)",
+          "zone": "advisory"
+        }
+      ],
+      "requested_domains": [],
+      "rules_loaded_count": 26,
+      "rules_total": 39,
+      "unknown_domains": []
+    },
+    "rule_version_code": "44c8505165ab5c65",
     "skills_loaded": 26,
     "tables": 3,
     "unregistered_candidates": [
@@ -1999,18 +2344,405 @@
         ],
         "table": "billing_event"
       }
-    ]
+    ],
+    "validation_manifest": {
+      "format": "dataval.validation_manifest.v1",
+      "input_hashes": {
+        "context": "ef0dd8722532188b0c834e42dad1c152d61c2405834ac8590b6cdebc19b56f38",
+        "ddl": "4258baa35f5b20979095007b207c54e1e2886b49fb3b92596c80bcecdb6f164a",
+        "relations": "df0d8f3973f9aef9529e78c8dcb32f0a4c3d5ce91ad9ec6e6b250fdf59ca12ae",
+        "samples/billing_event.csv": "c685a3fa68a42b2f51eb5419f8b261bccfacca12cae8b623775652f5f7075e31",
+        "samples/dim_customer.csv": "693b412a57f6e83488bd63f45441c292406976c28bbab8442afa42ac46f7088f",
+        "samples/subscription.csv": "62eb90be176878e42d20352a2778e4e2e10e74f11e4a173b68fb2e2074a27795"
+      },
+      "validation_bundle_code": "44c8505165ab5c65"
+    }
+  },
+  "rule_coverage": {
+    "available_domains": [
+      "BLM",
+      "CRM",
+      "Common",
+      "FCM",
+      "PLM",
+      "SCM"
+    ],
+    "empty_domains": [
+      "CRM"
+    ],
+    "loaded": [
+      {
+        "category": "best_practice",
+        "domain": "Common",
+        "file": "Common/knowhow/advisory/best_practice_semantic.md",
+        "id": "SKILL.best_practice_semantic",
+        "kind": "check-llm",
+        "title": "依表型態的最佳實踐建議（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "best_practice",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/bp_datetime_timezone.md",
+        "id": "SKILL.bp_datetime_timezone",
+        "kind": "check",
+        "title": "DateTime 應標明時區",
+        "zone": "gating"
+      },
+      {
+        "category": "best_practice",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/bp_lowcardinality_status.md",
+        "id": "SKILL.bp_lowcardinality_status",
+        "kind": "check",
+        "title": "status 欄位須用 LowCardinality（ClickHouse）",
+        "zone": "gating"
+      },
+      {
+        "category": "best_practice",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/bp_money_decimal.md",
+        "id": "SKILL.bp_money_decimal",
+        "kind": "check",
+        "title": "金額欄位必須用 Decimal",
+        "zone": "gating"
+      },
+      {
+        "category": "best_practice",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/bp_no_float.md",
+        "id": "SKILL.bp_no_float",
+        "kind": "check",
+        "title": "不可使用 Float 型別",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_column_case.md",
+        "id": "SKILL.naming_column_case",
+        "kind": "check",
+        "title": "欄位名須為 snake_case 全小寫",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_columns_commented.md",
+        "id": "SKILL.naming_columns_commented",
+        "kind": "check",
+        "title": "所有欄位必須有 COMMENT 註解",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_glossary.md",
+        "id": "SKILL.naming_glossary",
+        "kind": "check",
+        "title": "命名對照詞彙字典",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_identifier_length.md",
+        "id": "SKILL.naming_identifier_length",
+        "kind": "check",
+        "title": "識別字長度不超過 64 字元",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_pk_suffix.md",
+        "id": "SKILL.naming_pk_suffix",
+        "kind": "check",
+        "title": "主鍵欄位建議以 _id 結尾",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_reserved_words.md",
+        "id": "SKILL.naming_reserved_words",
+        "kind": "check",
+        "title": "欄位名避免 SQL 保留字",
+        "zone": "gating"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/advisory/naming_semantic.md",
+        "id": "SKILL.naming_semantic",
+        "kind": "check-llm",
+        "title": "跨表命名語意一致性（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "naming",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/naming_table_snake_case.md",
+        "id": "SKILL.naming_table_snake_case",
+        "kind": "check",
+        "title": "表名須為 snake_case 全小寫",
+        "zone": "gating"
+      },
+      {
+        "category": "best_practice",
+        "domain": "Common",
+        "file": "Common/knowhow_py/no_future_event_time.py",
+        "id": "SKILL.no_future_event_time",
+        "kind": "python",
+        "title": "Imperative skill: event_time-like columns should not allow obviously wrong",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "Common",
+        "file": "Common/knowhow_py/ssot_authority.py",
+        "id": "SKILL.ssot_authority",
+        "kind": "python",
+        "title": "SSOT 權威唯一性（依 registry，跨表）— 由舊 SSOT.AUTHORITY_* 搬遷。",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "Common",
+        "file": "Common/knowhow_py/ssot_fact_duplication.py",
+        "id": "SKILL.ssot_fact_duplication",
+        "kind": "python",
+        "title": "同一事實不可散落多表（依 attribute_owner）— 由舊 SSOT.FACT_DUPLICATION 搬遷。",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "Common",
+        "file": "Common/knowhow_py/ssot_join_keys.py",
+        "id": "SKILL.ssot_join_keys",
+        "kind": "python",
+        "title": "跨表 join key 相容性（型別＋樣本編碼）— 由舊 SSOT.JOIN_KEY_* 搬遷。",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/ssot_pii_amount_split.md",
+        "id": "SKILL.ssot_pii_amount_split",
+        "kind": "check",
+        "title": "個資與金額應分表存放",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "Common",
+        "file": "Common/knowhow/advisory/ssot_semantic.md",
+        "id": "SKILL.ssot_semantic",
+        "kind": "check-llm",
+        "title": "SSOT 候選衝突偵測（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/structural_audit_columns.md",
+        "id": "SKILL.structural_audit_columns",
+        "kind": "check",
+        "title": "表應有稽核欄位（created_at / updated_at）",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/structural_business_key.md",
+        "id": "SKILL.structural_business_key",
+        "kind": "check",
+        "title": "表必須有 Business Key",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/structural_engine_mergetree.md",
+        "id": "SKILL.structural_engine_mergetree",
+        "kind": "check",
+        "title": "明細表引擎須為 MergeTree 系列（ClickHouse）",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow_py/structural_fk_resolves.py",
+        "id": "SKILL.structural_fk_resolves",
+        "kind": "python",
+        "title": "FK 目標必須存在（跨表）— 由舊 STRUCT.FK_RESOLVES 搬遷。",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/structural_key_not_nullable.md",
+        "id": "SKILL.structural_key_not_nullable",
+        "kind": "check",
+        "title": "鍵欄位不可為 Nullable",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow/gating/structural_order_by.md",
+        "id": "SKILL.structural_order_by",
+        "kind": "check",
+        "title": "表必須有 ORDER BY（ClickHouse）",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "Common",
+        "file": "Common/knowhow_py/structural_type_sample.py",
+        "id": "SKILL.structural_type_sample",
+        "kind": "python",
+        "title": "宣告型別 vs 樣本資料一致（需樣本）— 由舊 STRUCT.TYPE_SAMPLE_MATCH 搬遷。",
+        "zone": "gating"
+      }
+    ],
+    "loaded_domains": [
+      "Common"
+    ],
+    "not_loaded": [
+      {
+        "category": "structural",
+        "domain": "BLM",
+        "file": "BLM/knowhow/gating/blm_baseline.md",
+        "id": "SKILL.blm_baseline",
+        "kind": "check",
+        "title": "BLM 領域基線(範例佔位,請以實際 BLM 規範替換)",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "FCM",
+        "file": "FCM/knowhow/gating/fcm_baseline.md",
+        "id": "SKILL.fcm_baseline",
+        "kind": "check",
+        "title": "FCM 領域基線(範例佔位,請以實際 FCM 規範替換)",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "FCM",
+        "file": "FCM/knowhow/advisory/fcm_master_data.md",
+        "id": "SKILL.fcm_master_data_semantic",
+        "kind": "check-llm",
+        "title": "FCM｜主檔語意一致性",
+        "zone": "advisory"
+      },
+      {
+        "category": "structural",
+        "domain": "PLM",
+        "file": "PLM/knowhow/gating/plm_bom_quantity.md",
+        "id": "SKILL.plm_bom_needs_quantity",
+        "kind": "check",
+        "title": "PLM｜BOM 必須記錄用量",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "PLM",
+        "file": "PLM/knowhow/advisory/plm_bom_integrity.md",
+        "id": "SKILL.plm_bom_structural_integrity",
+        "kind": "check-llm",
+        "title": "PLM｜BOM 結構完整性（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "ssot",
+        "domain": "PLM",
+        "file": "PLM/knowhow/advisory/plm_change_management.md",
+        "id": "SKILL.plm_engineering_change",
+        "kind": "check-llm",
+        "title": "PLM｜工程變更管理（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "best_practice",
+        "domain": "PLM",
+        "file": "PLM/knowhow/advisory/plm_lifecycle_stage.md",
+        "id": "SKILL.plm_lifecycle_stage",
+        "kind": "check-llm",
+        "title": "PLM｜生命週期階段（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "structural",
+        "domain": "PLM",
+        "file": "PLM/knowhow/gating/plm_part_master.md",
+        "id": "SKILL.plm_part_master_baseline",
+        "kind": "check",
+        "title": "PLM｜料件主檔基線",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "PLM",
+        "file": "PLM/knowhow/advisory/plm_revision_control.md",
+        "id": "SKILL.plm_revision_versioning",
+        "kind": "check-llm",
+        "title": "PLM｜版次與版本控制（語意）",
+        "zone": "advisory"
+      },
+      {
+        "category": "structural",
+        "domain": "SCM",
+        "file": "SCM/knowhow/gating/scm_grn_needs_po.md",
+        "id": "SKILL.scm_grn_needs_po",
+        "kind": "check",
+        "title": "收貨單必須掛採購單號",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "SCM",
+        "file": "SCM/knowhow/gating/scm_po_needs_supplier.md",
+        "id": "SKILL.scm_po_needs_supplier",
+        "kind": "check",
+        "title": "採購單必須掛供應商(範例)",
+        "zone": "gating"
+      },
+      {
+        "category": "structural",
+        "domain": "SCM",
+        "file": "SCM/knowhow/gating/scm_supplier_baseline.md",
+        "id": "SKILL.scm_supplier_baseline",
+        "kind": "check",
+        "title": "供應商主檔基線(範例,依實際 SCM 規範替換)",
+        "zone": "gating"
+      },
+      {
+        "category": "ssot",
+        "domain": "SCM",
+        "file": "SCM/knowhow/advisory/scm_supply_semantic.md",
+        "id": "SKILL.scm_supply_semantic",
+        "kind": "check-llm",
+        "title": "供應鏈語意檢視(範例,依實際 SCM know-how 替換)",
+        "zone": "advisory"
+      }
+    ],
+    "requested_domains": [],
+    "rules_loaded_count": 26,
+    "rules_total": 39,
+    "unknown_domains": []
   },
   "summary": {
-    "advisory": 5,
+    "advisory": 4,
     "blocking_count": 11,
     "compliant": false,
     "fail": 11,
     "gating": 50,
-    "info": 1,
+    "info": 0,
     "pass": 25,
     "skipped": 6,
-    "total": 55,
+    "total": 54,
     "warning": 12
   }
 }

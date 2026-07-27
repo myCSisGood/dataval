@@ -46,13 +46,6 @@ Python 端沒有 LLM 連線，以下顧問區項目需要你用你的 LLM 完成
 }}
 ```
 此檔案必須符合 `config/_engine/advisory_result.schema.json`；合併前會強制驗證。
-驗證規則（合併程式實際檢查的內容，照這裡寫就會通過）：
-- 最外層是 JSON object，**剛好**只有這三個 key：`naming_semantic`、`concept`、`skills`，不多不少。
-- `naming_semantic` 與 `concept` 各是一個 array；`skills` 是一個 object。
-- `skills` 的每個 key（skill id）必須符合 `^[a-z][a-z0-9_]*$`（小寫字母開頭，只含小寫字母／數字／底線）。
-- 每一筆建議物件的欄位**剛好**是 `target`、`message`、`rationale` 三個，不多不少。
-- 這三個欄位都必須是**非空字串**（不可是 null、數字、空字串或只有空白）。
-- 沒有建議時給空 array（`[]`）／空 object（`{{}}`）即可，不要省略 key。
 
 3. 跑一次合併，把建議填進報告與 HTML：
 ```

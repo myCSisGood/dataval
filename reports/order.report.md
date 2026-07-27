@@ -1,9 +1,10 @@
 # 資料設計驗證報告
-_產生時間 2026-07-25T09:06:54.351201Z_<br>
+_產生時間 2026-07-27T16:09:31.628775Z_<br>
 **判定：✅ 合規**（會擋項目 0）<br>
 通過 33 · 警告 5 · 失敗 0 · 略過 5 · 提示 3<br>
 閘門區 39 項 · 顧問區 7 項<br>
 > 方言 clickhouse · 表數 2 · 載入 skill 26 條
+> 驗證 bundle `44c8505165ab5c65`（含規則、validator 與依賴版本）
 
 ## Checking rule ID 摘要
 - ❌ 擋下：（無）
@@ -12,8 +13,50 @@ _產生時間 2026-07-25T09:06:54.351201Z_<br>
 - ℹ️ 未實檢／略過：`SKILL.structural_fk_resolves`
 - 💡 顧問：`CONCEPT.SUBJECT`、`FLOW.CONTEXT`、`PRODGRAPH.IMPACT`、`SKILL.best_practice_semantic`、`SKILL.naming_semantic`、`SKILL.ssot_semantic`
 
+## 規則涵蓋清單
+> 宣告域（context.md）：CRM · config 可用域：BLM、CRM、Common、FCM、PLM、SCM
+> 涵蓋：載入並執行 **26** 條 ／ config 共 **39** 條
+
+### ✅ 已載入並執行（26 條）
+- `SKILL.best_practice_semantic`（Common）→ 💡 顧問
+- `SKILL.bp_datetime_timezone`（Common）→ ✅ 通過
+- `SKILL.bp_lowcardinality_status`（Common）→ ✅ 通過
+- `SKILL.bp_money_decimal`（Common）→ ✅ 通過
+- `SKILL.bp_no_float`（Common）→ ✅ 通過
+- `SKILL.naming_column_case`（Common）→ ✅ 通過
+- `SKILL.naming_columns_commented`（Common）→ ✅ 通過
+- `SKILL.naming_glossary`（Common）→ ⚠️ 警告
+- `SKILL.naming_identifier_length`（Common）→ ✅ 通過
+- `SKILL.naming_pk_suffix`（Common）→ ✅ 通過
+- `SKILL.naming_reserved_words`（Common）→ ✅ 通過
+- `SKILL.naming_semantic`（Common）→ 💡 顧問
+- `SKILL.naming_table_snake_case`（Common）→ ✅ 通過
+- `SKILL.no_future_event_time`（Common）→ ✅ 通過
+- `SKILL.ssot_authority`（Common）→ ⚠️ 警告
+- `SKILL.ssot_fact_duplication`（Common）→ ✅ 通過
+- `SKILL.ssot_join_keys`（Common）→ ✅ 通過
+- `SKILL.ssot_pii_amount_split`（Common）→ ✅ 通過
+- `SKILL.ssot_semantic`（Common）→ 💡 顧問
+- `SKILL.structural_audit_columns`（Common）→ ✅ 通過
+- `SKILL.structural_business_key`（Common）→ ✅ 通過
+- `SKILL.structural_engine_mergetree`（Common）→ ✅ 通過
+- `SKILL.structural_fk_resolves`（Common）→ ℹ️ 未實檢／略過
+- `SKILL.structural_key_not_nullable`（Common）→ ✅ 通過
+- `SKILL.structural_order_by`（Common）→ ✅ 通過
+- `SKILL.structural_type_sample`（Common）→ ✅ 通過
+
+### ⏭️ 未載入：所屬域未在 context.md 宣告（13 條）
+- **BLM**：`SKILL.blm_baseline`
+- **FCM**：`SKILL.fcm_baseline`、`SKILL.fcm_master_data_semantic`
+- **PLM**：`SKILL.plm_bom_needs_quantity`、`SKILL.plm_bom_structural_integrity`、`SKILL.plm_engineering_change`、`SKILL.plm_lifecycle_stage`、`SKILL.plm_part_master_baseline`、`SKILL.plm_revision_versioning`
+- **SCM**：`SKILL.scm_grn_needs_po`、`SKILL.scm_po_needs_supplier`、`SKILL.scm_supplier_baseline`、`SKILL.scm_supply_semantic`
+> 若這些域也應納入檢查，請在 context.md front-matter 的 `domains` 補上該域後重跑。
+
+### ⚠️ 空的域（資料夾存在但無任何規則）
+- CRM
+
 ## Lineage 關聯
-> 關係來自 case config 的 lineage，並參照 ER diagram；兩者都是設計宣告，不代表已觀測到 runtime lineage。
+> 關係來自 relations.yaml，並參照 ER diagram；兩者都是設計宣告，不代表已觀測到 runtime lineage。
 
 | 來源 | 目標 | 欄位映射 | 性質 |
 |---|---|---|---|
@@ -93,11 +136,11 @@ _產生時間 2026-07-25T09:06:54.351201Z_<br>
 
 | | 區 | 檢查 | 對象 | 說明 | 來源 |
 |---|---|---|---|---|---|
-| ℹ️ | 顧問 | `PRODGRAPH.IMPACT` | `orders` | 正式區有 1 處依賴此表：CRM/order（order_items.order_id）。此表的結構或語意變更會影響這些 subject。 <br>**修法** 變更前通知依賴方；破壞性變更應開新表版本而非原地修改。 | rule |
+| ℹ️ | 顧問 | `PRODGRAPH.IMPACT` | `crm.orders` | 正式區有 1 處依賴此表：CRM/order（order_items.order_id）。此表的結構或語意變更會影響這些 subject。 <br>**修法** 變更前通知依賴方；破壞性變更應開新表版本而非原地修改。 | rule |
 | ✅ | 閘門 | `LINEAGE.COLUMN_EXISTS` | `(lineage)` | 所有 lineage 欄位映射都可解析。 | rule |
 | ✅ | 閘門 | `LINEAGE.CYCLE` | `(lineage)` | local lineage 未形成循環。 | rule |
 | ✅ | 閘門 | `LINEAGE.DOMAIN_SCOPE` | `(lineage)` | 所有外部上游 domain 都已明確選取。 | rule |
-| ✅ | 閘門 | `LINEAGE.METADATA` | `(lineage)` | case config 的 lineage 格式與目標表有效。 | rule |
+| ✅ | 閘門 | `LINEAGE.METADATA` | `(lineage)` | relations.yaml 的 lineage 格式與目標表有效。 | rule |
 | ✅ | 閘門 | `LINEAGE.TYPE_COMPATIBILITY` | `(lineage)` | 所有 lineage 欄位基本型別相容。 | rule |
 | ✅ | 閘門 | `LINEAGE.UPSTREAM_EXISTS` | `(lineage)` | 所有宣告的上游資料表都存在。 | rule |
 | ✅ | 閘門 | `PRODGRAPH.CARDINALITY_CONFLICT` | `(全域關聯圖)` | 關聯宣告與正式區既有 subject 的基數一致。 | rule |

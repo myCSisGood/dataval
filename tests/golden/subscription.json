@@ -281,7 +281,6 @@
   "advisory": [
    "CONCEPT.SUBJECT",
    "LINEAGE.SUGGESTION",
-   "PRODGRAPH.IMPACT",
    "SKILL.best_practice_semantic",
    "SKILL.naming_semantic",
    "SKILL.plm_bom_structural_integrity",

@@ -69,6 +69,48 @@ class ArchitectureTest(unittest.TestCase):
         skipped_ids = {f.check_id for f in findings if f.status == "skipped"}
         self.assertTrue(set(summary["not_checked"]).issubset(skipped_ids))
 
+    def test_rule_coverage_accounts_for_every_config_rule(self):
+        """涵蓋帳本：載入 ＋ 未載入 恰好覆蓋 config 全部規則，母體無遺漏。"""
+        _, _, meta = validate(self.ddl, self.cfg, domains=["PLM"], **KW)
+        cov = meta["rule_coverage"]
+        # 母體守恆：total == loaded + not_loaded，兩者不重疊。
+        self.assertEqual(cov["rules_total"],
+                         cov["rules_loaded_count"] + len(cov["not_loaded"]))
+        self.assertEqual(cov["rules_loaded_count"], len(cov["loaded"]))
+        loaded_ids = {r["id"] for r in cov["loaded"]}
+        not_loaded_ids = {r["id"] for r in cov["not_loaded"]}
+        self.assertEqual(set(), loaded_ids & not_loaded_ids)
+        # 已載入者恰為引擎實際載入的 checking rule ID。
+        self.assertEqual(set(meta["checking_rule_ids_loaded"]), loaded_ids)
+
+    def test_rule_coverage_loads_declared_domain_plus_common(self):
+        """宣告 PLM → PLM 與 Common 的規則都在 loaded，其他域落在 not_loaded。"""
+        _, _, meta = validate(self.ddl, self.cfg, domains=["PLM"], **KW)
+        cov = meta["rule_coverage"]
+        loaded_domains = {r["domain"] for r in cov["loaded"]}
+        self.assertIn("Common", loaded_domains)
+        self.assertIn("PLM", loaded_domains)
+        not_loaded_domains = {r["domain"] for r in cov["not_loaded"]}
+        # 未宣告的業務域（例如 SCM）不得出現在已載入清單。
+        self.assertNotIn("SCM", loaded_domains)
+        self.assertIn("SCM", not_loaded_domains)
+
+    def test_rule_coverage_flags_empty_domain(self):
+        """空的域（資料夾存在但無規則，如 CRM）要被標出來，不能靜默。"""
+        _, _, meta = validate(self.ddl, self.cfg, domains=["CRM"], **KW)
+        cov = meta["rule_coverage"]
+        self.assertIn("CRM", cov["empty_domains"])
+        # 宣告一個空域時，實際生效的仍只有 Common 的規則。
+        self.assertTrue(all(r["domain"] == "Common" for r in cov["loaded"]))
+
+    def test_rule_coverage_appears_in_reports(self):
+        """三式報告都要呈現涵蓋清單（markdown/html 皆有；json 有結構化鍵）。"""
+        from dataval.report import to_json
+        _, findings, meta = validate(self.ddl, self.cfg, domains=["PLM"], **KW)
+        self.assertIn("規則涵蓋清單", to_markdown(findings, meta))
+        self.assertIn("規則涵蓋清單", to_html(findings, meta))
+        self.assertIn("rule_coverage", json.loads(to_json(findings, meta)))
+
     def test_clickhouse_keys_are_separate(self):
         physical_only = parse_ddl(
             "CREATE TABLE t (customer_id UInt64, value String) "

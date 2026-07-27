@@ -1,6 +1,6 @@
 # dataval — ClickHouse DDL 資料治理工具
 
-> 本地端、可重現的資料設計驗證引擎。輸入一組 data subject（DDL＋樣本＋關聯＋語意描述），
+> 本地端、可重現的資料設計驗證引擎。輸入一組 data subject（DDL＋關聯＋語意描述，樣本選填），
 > 輸出可稽核的合規報告（Markdown / JSON / HTML）。
 
 一句話：**閘門用確定性規則，LLM 只進顧問區。** 合規判定永遠零 LLM，同一輸入永遠同一結果。
@@ -25,22 +25,33 @@
 
 ### 1. 建立環境
 
+需要 **Python 3.10 以上**。使用專案 metadata 安裝，避免繞過 sqlglot／PyYAML
+的相容版本範圍：
+
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install sqlglot pyyaml
+.venv/bin/pip install -e .
 ```
 
-### 2. 準備輸入（一個 data subject＝一組四件）
+需要逐版完全一致的依賴時，可改用：
 
-以 `<名>.sql` 為錨，**四件缺一不可**，缺任一件不會產生報告：
+```bash
+.venv/bin/pip install -r requirements.lock
+.venv/bin/pip install -e . --no-deps
+```
+
+### 2. 準備輸入（一個 data subject＝三件必備＋樣本選填）
+
+以 `<名>.sql` 為錨，**三件必備缺一不可**（缺任一件不會產生報告）；
+樣本是**選填**，沒有樣本仍會產生報告，只是樣本相關檢查會略過：
 
 ```text
 input/
   <名>/
-    <名>.sql            DDL（ClickHouse；可含多張 CREATE TABLE）
-    samples/<表名>.csv   樣本資料，DDL 每張表各一份（表頭＝欄名）
-    relations.yaml      表間關聯（from / to / cardinality）
-    context.md          語意描述（front-matter＋段落，「粒度」必填）
+    <名>.sql            DDL（ClickHouse；可含多張 CREATE TABLE）  ← 必備
+    relations.yaml      表間關聯（from / to / cardinality）      ← 必備
+    context.md          語意描述（front-matter＋段落，「粒度」必填）← 必備
+    samples/<表名>.csv   樣本資料，DDL 每張表各一份（表頭＝欄名）  ← 選填
 ```
 
 格式細節與慣例（CSV 的 NULL 表示法、relations 的三段式跨 domain 引用、
@@ -55,8 +66,9 @@ context 的必填段落）見 **`input/README.md`**。附兩個範例：
 
 `run.py` 是唯一日常入口，零參數自動掃 `input/`：
 
-1. **前置檢核**（存在 → 可解析 → 一致，三層）：四件不齊的 DDL 直接跳過、
+1. **前置檢核**（存在 → 可解析 → 一致，三層）：三件必備不齊的 DDL 直接跳過、
    印出缺件檢核表、留檔 `reports/<名>.precheck.md`，並以 **exit code 2** 結束。
+   樣本缺漏或有問題不擋，只降為警告並略過該表。
 2. 檢核通過 → 跑閘門區全部確定性規則 → 產出三式報告到 `reports/`：
    `<名>.report.md`（人讀）、`.report.json`（程式讀）、`.report.html`（單檔互動，雙擊即開）。
 3. 未接 LLM 時另產 `<名>.advisory_prompt.md`，供 agent 補完顧問區（見下文）。
@@ -68,8 +80,8 @@ context 的必填段落）見 **`input/README.md`**。附兩個範例：
 ## 架構：一條主流程
 
 ```text
-input/（四件套）
-  → 前置檢核（precheck.py：存在／可解析／一致，缺件即止）
+input/（三件必備＋樣本選填）
+  → 前置檢核（precheck.py：存在／可解析／一致，必備缺件即止；樣本缺漏只警告）
   → parser.py（sqlglot，ClickHouse 優先、方言可換）
   → 規則 compile（.md → build/compiled_rules.json，有變更才重建）
   → 閘門區：compiled 規則（.md 卡控動詞）＋ config/Common/knowhow_py/*.py（程式式）
@@ -84,14 +96,14 @@ LLM 存在與否不得改變閘門判定。**
 
 ---
 
-## 輸入四件的角色
+## 輸入各件的角色
 
-| 件 | 誰提供 | 被誰消費 |
-|---|---|---|
-| `<名>.sql` DDL | 資料設計者 | 全部規則 |
-| `samples/*.csv` | 資料設計者 | 型別對樣本、join key 編碼一致、**relations 基數實檢** |
-| `relations.yaml` | 資料設計者 | 轉為 declared lineage（表／欄位存在、型別相容、循環 → 會擋）；基數對樣本矛盾 → `RELATION.CARDINALITY_SAMPLE` 會擋；晉升後成為全域圖的邊 |
-| `context.md` | 資料設計者＋領域負責人 | front-matter（subject／domains／business_keys）進引擎；「粒度」等段落餵顧問區與概念層 |
+| 件 | 必備？ | 誰提供 | 被誰消費 |
+|---|---|---|---|
+| `<名>.sql` DDL | 必備 | 資料設計者 | 全部規則 |
+| `samples/*.csv` | **選填** | 資料設計者 | 型別對樣本、join key 編碼一致、**relations 基數實檢**（缺樣本時這些檢查略過） |
+| `relations.yaml` | 必備 | 資料設計者 | 轉為 declared lineage（表／欄位存在、型別相容、循環 → 會擋）；基數對樣本矛盾 → `RELATION.CARDINALITY_SAMPLE` 會擋（缺樣本時不觸發）；晉升後成為全域圖的邊 |
+| `context.md` | 必備 | 資料設計者＋領域負責人 | front-matter（subject／domains／business_keys）進引擎；「粒度」等段落餵顧問區與概念層 |
 
 ---
 
@@ -149,7 +161,7 @@ production/
       <subject>.sql              已核准 DDL
       <subject>.relations.yaml   關聯宣告（全域 lineage 圖的邊）
       <subject>.context.md       語意描述（粒度宣告留檔）
-      _promotion.yaml            晉升記錄（日期、卡控結果碼、規則版本碼、樣本 hash）
+      _promotion.yaml            晉升記錄（日期、卡控結果碼、驗證 bundle、四件輸入 hash）
 ```
 
 樣本**不進**正式區（驗證證據非正式資產）；晉升記錄存各 CSV 的 SHA256 供追溯。
@@ -163,10 +175,12 @@ production/
 .venv/bin/python promote.py <名> --update   # 重新晉升（保留前版記錄）
 ```
 
-晉升前提是最新報告 `summary.compliant == true`，不合規會被拒絕。晉升記錄的兩碼提供因果保證：
+晉升前提是最新報告 `summary.compliant == true`，且四件輸入與驗證 bundle
+必須和產報告當下完全相同；任何內容或規則在報告後變更都會被拒絕。晉升記錄的兩碼提供因果保證：
 
-- **卡控結果碼** = 閘門區 findings（rule｜status｜target）排序後的 SHA256
-- **規則版本碼** = `build/compiled_rules.json` 內容的 SHA256
+- **卡控結果碼** = 閘門區 findings（rule｜status｜severity｜target）排序後的 SHA256
+- **驗證 bundle／規則版本碼** = `build/compiled_rules.json` 的 SHA256；內容涵蓋
+  宣告式規則、Python 規則原始碼、內建 validator 與 parser 依賴版本
 
 ### 正式區給新 subject 的檢查
 
@@ -219,7 +233,8 @@ production/
 3. `python merge_advisory.py` 合併並重繪三式報告
 4. `python merge_advisory.py --status` → exit 0 = 顧問區全數補完
 
-合併程式會逐項比較合併前後的 gating findings，不一致就**拒絕寫入**。
+合併程式與 `run.py` 共用同一套四件輸入載入流程，並逐項比較合併前後的
+gating findings，不一致就**拒絕寫入**。`--status` 在任一報告仍待補時回傳非零。
 直連 LLM 可設 `DATAVAL_LLM_BASE_URL / DATAVAL_LLM_MODEL / DATAVAL_LLM_API_KEY`。
 
 ---
@@ -262,7 +277,7 @@ run.py                  日常入口（前置檢核 → 驗證 → 三式報告�
 promote.py              晉升合規 subject 到正式區（附雙碼晉升記錄）
 production_audit.py     正式區全區健檢
 merge_advisory.py       顧問區補完合併（--status 為完成閘門）
-rules.py                規則管理 CLI（list / new / lint / compile / draft / adopt）
+rules.py                規則管理 CLI（list / new / lint / compile / docs / draft / adopt）
 dataval/
   engine.py             主流程與 _enforce_zone
   precheck.py           輸入前置檢核（四件套三層檢核）
@@ -285,9 +300,8 @@ config/                 第一層即領域：Common / BLM / SCM / PLM / FCM / CR
   _engine/              引擎層（default.yaml、templates、schema、er_diagrams、fixtures）
 production/             正式區（一 subject 一資料夾）
 build/                  compile 產物（自動生成）
-reports/                報告輸出，依代表性 domain 分類到 reports/<域>/（優先非 Common
-                        的 domain；全 Common → Common/；無 domain → _uncategorized/）。
-                        precheck.md 例外，維持扁平放 reports/ 根（缺件時可能不知道 domain）
+reports/                報告輸出（.report.md/.json/.html、precheck.md）；webapp 送驗的
+                        時間戳歷史版另存 reports/.history/（供同系列 diff，不入庫）
 rules_history/          規則版控（自動維護）
 drafts/                 規則起草暫存與紀錄
 tests/                  守門測試

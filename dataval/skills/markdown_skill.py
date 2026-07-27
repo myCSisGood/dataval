@@ -236,7 +236,7 @@ def _eval(t: Table, req: dict, glossary: dict | None = None) -> tuple[bool, dict
         return fail("表缺少可識別的 business key",
                     "有明確業務識別鍵",
                     f"排序鍵={t.sorting_key or '無'}、PRIMARY KEY={t.primary_key or '無'}",
-                    "指定 PRIMARY KEY，或以單一 <entity>_id 作為 ORDER BY 鍵")
+                    "在 context.md front-matter 的 business_keys 明確宣告業務識別鍵")
     if "has_order_by" in req:
         if t.sorting_key:
             return OK

@@ -1,4 +1,4 @@
-"""config/domains 領域佈局的守門測試。
+"""config/<domain> 領域佈局的守門測試。
 
 守的保證：
   C1 第一層 = 領域（Common/BLM/SCM/PLM/FCM/CRM），每域四種知識資料夾齊備

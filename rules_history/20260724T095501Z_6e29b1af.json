@@ -1,33 +1,12 @@
 {
- "domains": [
-  "BLM",
-  "CRM",
-  "Common",
-  "FCM",
-  "PLM",
-  "SCM"
- ],
- "format": "dataval.compiled_rules.v3",
- "implementation": {
-  "dependencies": {
-   "PyYAML": "6.0.3",
-   "sqlglot": "30.13.0"
-  },
-  "files": {
-   "dataval/engine.py": "3721e06cdad63bfcaaa8fd61c849809c9192d7f026d66e5d54f049e289a0fa77",
-   "dataval/flows.py": "cd3daf2472701cbaa35b8179eb1fd23c2139d833b58bfcdf23d209a1f345faa8",
-   "dataval/lineage.py": "e69a56e3230e38e93e2d85d80a47076b45ef574a74c0e50534cca6ff6ae5962f",
-   "dataval/model.py": "3d97b3056a3bcc0d57fd9774625ed42c44f814eafbf9888901b3dde449090491",
-   "dataval/parser.py": "5b8d31988770ec45ea81795b7652f3e00e0519c17a2a423d8424b26825d945cb",
-   "dataval/precheck.py": "c4ef763f714d52d1de2ead501f2de991e49f03949c79ae6175c80beaea9767c5",
-   "dataval/prodgraph.py": "12b10d6d969b99c1c2b8850fbbe6a3b21c1bdc017242aecf5bff5ff5f657cc77",
-   "dataval/production.py": "8888b0365c03555a7d0f2ca99965c07907cfce92057e873ff6bffde05e552f43",
-   "dataval/skills/__init__.py": "9fe67bb469a2e0e054c7827ab2f8e58f49edf9c446ccfa509a012af382ddcdfe",
-   "dataval/skills/markdown_skill.py": "ee2b5ca40a32091b1a50888b2f1badfd8edf0f71ad6cde15fd68f05d6008d805",
-   "dataval/subject_inference.py": "fa2270cb693912bef74d55d3712ae1a6408a6a2c514ef5c3e3451af640a9bb9f"
-  }
- },
+ "recorded_at": "2026-07-24T09:55:01+00:00",
+ "rule_version_code": "6e29b1af52a1883f",
+ "previous_code": "f70bd1adfb9f71ef",
  "rule_count": 39,
+ "added": [],
+ "removed": [],
+ "changed": [],
+ "snapshot_file": "20260724T095501Z_6e29b1af.json",
  "rules": [
   {
    "applies_to": {
@@ -758,5 +737,25 @@
    "unparsed": [],
    "zone": "advisory"
   }
- ]
+ ],
+ "implementation": {
+  "dependencies": {
+   "PyYAML": "6.0.3",
+   "sqlglot": "30.13.0"
+  },
+  "files": {
+   "dataval/engine.py": "3721e06cdad63bfcaaa8fd61c849809c9192d7f026d66e5d54f049e289a0fa77",
+   "dataval/flows.py": "cd3daf2472701cbaa35b8179eb1fd23c2139d833b58bfcdf23d209a1f345faa8",
+   "dataval/lineage.py": "e69a56e3230e38e93e2d85d80a47076b45ef574a74c0e50534cca6ff6ae5962f",
+   "dataval/model.py": "3d97b3056a3bcc0d57fd9774625ed42c44f814eafbf9888901b3dde449090491",
+   "dataval/parser.py": "5b8d31988770ec45ea81795b7652f3e00e0519c17a2a423d8424b26825d945cb",
+   "dataval/precheck.py": "c4ef763f714d52d1de2ead501f2de991e49f03949c79ae6175c80beaea9767c5",
+   "dataval/prodgraph.py": "12b10d6d969b99c1c2b8850fbbe6a3b21c1bdc017242aecf5bff5ff5f657cc77",
+   "dataval/production.py": "8888b0365c03555a7d0f2ca99965c07907cfce92057e873ff6bffde05e552f43",
+   "dataval/skills/__init__.py": "9fe67bb469a2e0e054c7827ab2f8e58f49edf9c446ccfa509a012af382ddcdfe",
+   "dataval/skills/markdown_skill.py": "ee2b5ca40a32091b1a50888b2f1badfd8edf0f71ad6cde15fd68f05d6008d805",
+   "dataval/subject_inference.py": "fa2270cb693912bef74d55d3712ae1a6408a6a2c514ef5c3e3451af640a9bb9f"
+  }
+ },
+ "implementation_changed": true
 }

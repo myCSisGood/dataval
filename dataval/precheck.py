@@ -1,18 +1,22 @@
 """輸入前置檢核（pre-flight gate）。
 
-一個 data subject 一組四件（以 <名>.sql 為錨）：
-    input/<名>.sql                DDL
-    input/<名>.samples/<表>.csv   樣本資料（每表一份）
-    input/<名>.relations.yaml     表間關聯（含 cardinality）
-    input/<名>.context.md         語意描述（front-matter＋段落，「粒度」必填）
+一個 data subject 的輸入（以 <名>.sql 為錨）：
+    input/<名>/<名>.sql           DDL              ← 必備
+    input/<名>/relations.yaml     表間關聯（含 cardinality） ← 必備
+    input/<名>/context.md         語意描述（front-matter＋段落，「粒度」必填）← 必備
+    input/<名>/samples/<表>.csv   樣本資料（每表一份） ← 選填
 
-三層檢核，任何一層不過就不產 report：
-    1. 存在性   四件齊全；DDL 每張表都有對應 CSV
+三件必備輸入（DDL／relations／context）任一不過就不產 report；
+樣本為**選填**——沒有樣本仍會產生報告，只是樣本相關檢查（型別對樣本、
+join key 編碼一致性、基數實檢）因無資料而略過。
+
+三層檢核：
+    1. 存在性   三件必備齊全（樣本可缺）
     2. 可解析性 DDL 可 parse、CSV 表頭可讀、YAML 語法正確、context 有必填段落
     3. 一致性   CSV 欄名 ⊆ DDL 欄位；relations 端點存在；cardinality 值合法
 
 此模組完全確定性、不接 LLM，屬閘門區的前置站。
-宣告的 cardinality 會拿樣本實檢：宣稱 N:1 / 1:1 但樣本出現重複鍵
+提供了樣本時，宣告的 cardinality 會拿樣本實檢：宣稱 N:1 / 1:1 但樣本出現重複鍵
 → 產出會擋的 Finding（隨報告輸出，不在 precheck 層攔）。
 """
 from __future__ import annotations
@@ -280,33 +284,36 @@ def run_precheck(ddl_path: str) -> PrecheckResult:
         return result
     result.add("DDL", True, f"{name}.sql（{len(tables)} 張表：{'、'.join(tables)}）")
 
-    # ── ② 樣本資料：<名>.samples/<表>.csv ────────────────
+    # ── ② 樣本資料（選填）：<名>.samples/<表>.csv ────────────────
+    # 樣本不是必備。缺樣本、只涵蓋部分表、或某份 CSV 有問題，都不擋報告——
+    # 一律降為警告，並把該表的樣本略過（樣本相關檢查對缺樣本的表自然跳過）。
+    # 提供且有效的樣本照常餵給引擎（型別對樣本、join key 編碼、基數實檢）。
     samples_dir = pieces["samples"]
     if not os.path.isdir(samples_dir):
-        result.add("樣本資料", False,
-                   "缺 samples/ 資料夾（DDL 每張表各需一份 <表名>.csv）")
+        result.add("樣本資料", True, "未提供（選填）；樣本相關檢查略過")
+        result.warnings.append(
+            "未提供 samples/（選填）；型別對樣本、join key 編碼一致性、"
+            "基數實檢因無樣本而略過")
     else:
         csv_files = {os.path.splitext(fn)[0]: os.path.join(samples_dir, fn)
                      for fn in sorted(os.listdir(samples_dir))
                      if fn.lower().endswith(".csv")}
         missing = [t for t in tables if t not in csv_files]
         extra = [n for n in csv_files if n not in tables]
-        problems: list[str] = []
-        if missing:
-            problems.append(f"缺 {['%s.csv' % m for m in missing]}"
-                            f"（DDL 有 {len(tables)} 張表，只找到 {len(csv_files) - len(extra)} 份）")
         for tname, path in csv_files.items():
             if tname not in tables:
                 continue
             try:
                 header, rows = load_sample_csv(path)
             except Exception as e:
-                problems.append(f"{tname}.csv 解析失敗：{e}")
+                result.warnings.append(
+                    f"{tname}.csv 解析失敗，該表樣本略過：{e}")
                 continue
             ddl_cols = {c.name for c in tables[tname].columns}
             unknown = [h for h in header if h not in ddl_cols]
             if unknown:
-                problems.append(f"{tname}.csv 表頭欄名不在 DDL：{unknown}")
+                result.warnings.append(
+                    f"{tname}.csv 表頭欄名不在 DDL，該表樣本略過：{unknown}")
                 continue
             if not rows:
                 result.warnings.append(f"{tname}.csv 只有表頭沒有資料列")
@@ -314,11 +321,19 @@ def run_precheck(ddl_path: str) -> PrecheckResult:
         if extra:
             result.warnings.append(
                 f"samples/ 有 DDL 沒有的表：{extra}（將忽略）")
-        if problems:
-            result.add("樣本資料", False, "；".join(problems))
-        else:
+        uncovered = [t for t in tables if t not in result.samples]
+        if uncovered:
+            result.warnings.append(
+                f"樣本未涵蓋全部表（選填）：{['%s.csv' % t for t in uncovered]}"
+                f"——這些表的樣本相關檢查略過")
+        if result.samples:
             counts = "、".join(f"{t} {len(r)} 列" for t, r in result.samples.items())
-            result.add("樣本資料", True, f"{os.path.basename(samples_dir)}/（{counts}）")
+            detail = f"{os.path.basename(samples_dir)}/（{counts}）"
+            if uncovered:
+                detail += f"；{len(uncovered)}/{len(tables)} 張表未附樣本"
+            result.add("樣本資料", True, detail)
+        else:
+            result.add("樣本資料", True, "有 samples/ 但無可用樣本（選填）")
 
     # ── ③ 關聯：<名>.relations.yaml ──────────────────────
     rel_path = pieces["relations"]
@@ -411,21 +426,44 @@ def run_precheck(ddl_path: str) -> PrecheckResult:
                     result.warnings.append(f"context 建議補「{label}」段落")
             domains = meta.get("domains") or []
             if not (isinstance(domains, list) and
-                    all(isinstance(d, str) for d in domains)):
-                problems.append("front-matter 的 domains 必須是字串 list")
+                    all(isinstance(d, str) and d.strip() for d in domains)):
+                problems.append("front-matter 的 domains 必須是非空字串 list")
                 domains = []
-            bkeys = meta.get("business_keys") or {}
+            bkeys = meta.get("business_keys", {})
+            if bkeys is None:
+                bkeys = {}
             if not isinstance(bkeys, dict):
                 problems.append("front-matter 的 business_keys 必須是 table -> columns 對照")
                 bkeys = {}
+            normalized_bkeys: dict[str, list[str]] = {}
+            if isinstance(bkeys, dict):
+                for table_name, columns in bkeys.items():
+                    table_name = str(table_name)
+                    if (not isinstance(columns, list) or not columns or
+                            not all(isinstance(column, str) and column.strip()
+                                    for column in columns)):
+                        problems.append(
+                            f"business_keys.{table_name} 必須是非空欄位名稱 list")
+                        continue
+                    table = tables.get(table_name)
+                    if table is None:
+                        problems.append(
+                            f"business_keys 指向 DDL 不存在的表 '{table_name}'")
+                        continue
+                    missing_columns = [column for column in columns
+                                       if table.col(column) is None]
+                    if missing_columns:
+                        problems.append(
+                            f"business_keys.{table_name} 含 DDL 不存在欄位 "
+                            f"{missing_columns}")
+                        continue
+                    normalized_bkeys[table_name] = list(dict.fromkeys(columns))
             if problems:
                 result.add("語意描述", False, "；".join(problems))
             else:
                 result.subject = subject
                 result.domains = [str(d) for d in domains]
-                result.business_keys = {
-                    str(t): [str(c) for c in cols]
-                    for t, cols in bkeys.items() if isinstance(cols, list)}
+                result.business_keys = normalized_bkeys
                 result.context_text = text.strip()
                 got = "、".join(sections) or "(無段落)"
                 result.add("語意描述", True,
@@ -445,7 +483,7 @@ def run_precheck(ddl_path: str) -> PrecheckResult:
 
 def console_lines(result: PrecheckResult) -> list[str]:
     head = ("✅" if result.passed else "❌") + f" {result.name} — " + (
-        "輸入四件齊全，進入驗證" if result.passed else "未達可驗證門檻，不產生報告")
+        "必備輸入齊全，進入驗證" if result.passed else "未達可驗證門檻，不產生報告")
     lines = [head]
     for item in result.items:
         lines.append(f"   {'✅' if item.ok else '❌'} {item.label:　<6}{item.detail}")
@@ -459,7 +497,8 @@ def to_markdown(result: PrecheckResult) -> str:
     status = "✅ 通過" if result.passed else "❌ 未通過（不產生報告）"
     buf.write(f"# 輸入前置檢核 — {result.name}\n\n")
     buf.write(f"**結果：{status}**\n\n")
-    buf.write("一組 data subject 需要四件輸入（存在 → 可解析 → 一致，三層檢核）：\n\n")
+    buf.write("一組 data subject 需要三件必備輸入（DDL／relations／context），"
+              "樣本為選填（存在 → 可解析 → 一致，三層檢核）：\n\n")
     buf.write("| 檢核項 | 狀態 | 說明 |\n|---|---|---|\n")
     for item in result.items:
         buf.write(f"| {item.label} | {'✅' if item.ok else '❌'} | {item.detail} |\n")
@@ -471,9 +510,9 @@ def to_markdown(result: PrecheckResult) -> str:
         buf.write("\n## 需要補齊的輸入格式\n\n")
         buf.write("```text\n")
         buf.write(f"input/{result.name}/\n")
-        buf.write(f"  {result.name}.sql        DDL（ClickHouse）\n")
-        buf.write("  samples/<表名>.csv   每張表一份樣本（表頭=欄名）\n")
-        buf.write("  relations.yaml       表間關聯（from/to/cardinality）\n")
-        buf.write("  context.md           語意描述（「粒度」段落必填）\n")
+        buf.write(f"  {result.name}.sql        DDL（ClickHouse）        ← 必備\n")
+        buf.write("  relations.yaml       表間關聯（from/to/cardinality）← 必備\n")
+        buf.write("  context.md           語意描述（「粒度」段落必填）  ← 必備\n")
+        buf.write("  samples/<表名>.csv   每張表一份樣本（表頭=欄名）  ← 選填\n")
         buf.write("```\n\n完整格式與範例請見 `input/README.md`。\n")
     return buf.getvalue()

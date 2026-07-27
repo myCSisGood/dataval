@@ -20,12 +20,12 @@ viewer 有七個分頁（多數需後端，見下方 webapp；純 `file://` 開�
 
 ## 立即使用
 
-- **雙擊 `index.html`**（`file://` 即可）→ 「報告」分頁把 `reports/<域>/xxx.report.json`
+- **雙擊 `index.html`**（`file://` 即可）→ 「報告」分頁把 `reports/xxx.report.json`
   拖進去，或按「選擇 JSON 檔」。「Lineage」分頁會畫出這份報告的關聯圖。
 - **用網址參數**（需 http 伺服器）：
   ```bash
   .venv/bin/python -m http.server 8000     # 在專案根目錄
-  # 開 http://localhost:8000/frontend/index.html?src=/reports/CRM/order.report.json
+  # 開 http://localhost:8000/frontend/index.html?src=/reports/order.report.json
   ```
 
 ## 本機 web app（webapp.py）— 送驗與全域關聯圖
@@ -44,7 +44,7 @@ viewer 有七個分頁（多數需後端，見下方 webapp；純 `file://` 開�
 | `GET /` | 這個 `index.html` |
 | `GET /api/subjects` | 列出 `input/` 下 subject 與四件齊全狀態（送驗分頁的重名偵測也用它） |
 | `GET /api/subject?name=X` | 既有 subject 的四件內容（供「載入既有」填入編輯框） |
-| `GET /api/lineage-graph` | 正式區全域關聯圖（`prodgraph.export_graph`） |
+| `GET /api/lineage-graph` | 正式區全域關聯圖（`graph_export.export_graph`） |
 | `GET /api/outputs` | 列出 reports／rules_history／drafts 的輸出檔（存放區） |
 | `GET /api/file?path=X` | 檢視單一輸出檔（路徑限 reports 等允許根，防穿越） |
 | `GET /api/rule-history` | 規則版本歷程（`rules_history/*.json` 快照，供 Rule story） |
@@ -52,7 +52,7 @@ viewer 有七個分頁（多數需後端，見下方 webapp；純 `file://` 開�
 | `GET /api/report-series` | 報告依系列（subject）分組，含目前版與 `.history/` 歷史版 |
 | `GET /api/rule-snapshot?file=` | 某個 `rules_history` 快照的完整規則清單（rule story 點進去） |
 | `GET /api/simulate-impact` | 正式區規則影響模擬（`simulate_impact.simulate_all`） |
-| `POST /api/validate` | 把四件寫入 `input/<名>/`，驗證後把三式報告落地到 `reports/<域>/`（並存 `.history/` 時間戳版），回傳 report JSON |
+| `POST /api/validate` | 把四件寫入 `input/<名>/`，驗證後把三式報告落地到 `reports/`（並存 `.history/` 時間戳版），回傳 report JSON |
 
 送驗流程：填四件 → 「送出驗證」（四件皆非空才啟用）→ 看報告 → 對有修法的 finding 按
 「套用修正到編輯框」（只把 `-- TODO(fix): …` 插進 DDL 編輯框，**不自動送出也不改檔**）

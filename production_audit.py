@@ -20,7 +20,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from dataval.compiler import ensure_compiled
+from dataval.compiler import require_current_compiled
 from dataval.prodgraph import audit, current_rule_code
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,8 +34,15 @@ ICON = {"fail": "❌", "warn": "⚠️", "ok": "✅"}
 
 
 def main():
-    compiled_path, _ = ensure_compiled(
-        DOMAIN_ROOT, RULES_ROOT, os.path.join(HERE, "build", "compiled_rules.json"))
+    try:
+        compiled_path = require_current_compiled(
+            DOMAIN_ROOT, RULES_ROOT,
+            os.path.join(HERE, "build", "compiled_rules.json"))
+    except Exception as error:
+        print(f"❌ 驗證 bundle 尚未就緒：{error}", file=sys.stderr)
+        print("請先執行 run.py，讓規則變更被編譯並記入 rules_history。",
+              file=sys.stderr)
+        sys.exit(1)
     rule_code = current_rule_code(compiled_path)
     result = audit(PRODUCTION_ROOT, rule_code)
     subjects, rows = result["subjects"], result["rows"]

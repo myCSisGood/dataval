@@ -24,7 +24,7 @@ def load_config(path: str) -> dict:
 
 def load_glossary(config_dir: str, domains: list[str] | None = None,
                   problems: list[str] | None = None) -> dict:
-    """合併詞彙字典。基底：config/domains/Common/naming/glossary.yaml；
+    """合併詞彙字典。基底：config/Common/naming/glossary.yaml；
     再依請求的 domain 疊加各自的 naming/glossary.yaml（後載入者可增補／覆蓋）。
     相容：舊式 config/glossary.yaml 若存在會先併入。"""
     merged: dict = {"banned_terms": {}, "aliases": {}, "standard_terms": []}
@@ -70,6 +70,41 @@ def load_glossary(config_dir: str, domains: list[str] | None = None,
             if problems is not None:
                 problems.append(f"{label}：{type(e).__name__}: {e}")
     return merged
+
+
+def _rule_coverage(reg) -> dict:
+    """規則涵蓋帳本：以 config 完整規則清單為母體，交代每一條的去向。
+
+    不改變任何合規判定，也不改動載入邏輯（仍是 Common ＋ context.md 宣告的域）。
+    純粹讓報告能回答：「我宣告的域，底下每條規則是否都執行了？被略過的是哪些、為什麼？」
+
+    分三類：
+      loaded        — 本次載入並執行的規則（結果另由 checking rule ID 摘要呈現）
+      not_loaded    — 規則存在於 config，但所屬域未被 context.md 宣告而未載入
+      empty_domains — config 有此域資料夾卻無任何規則（例如 CRM 這類 stub 域）
+    """
+    loaded_ids = set(reg.loaded_rule_ids)
+    inventory = list(reg.inventory)
+    loaded = sorted(
+        (r for r in inventory if r["id"] in loaded_ids),
+        key=lambda r: (r["domain"], r["id"]))
+    not_loaded = sorted(
+        (r for r in inventory if r["id"] not in loaded_ids),
+        key=lambda r: (r["domain"], r["id"]))
+    domains_with_rules = {r["domain"] for r in inventory}
+    empty_domains = sorted(
+        d for d in reg.available_domains if d not in domains_with_rules)
+    return {
+        "available_domains": list(reg.available_domains),
+        "loaded_domains": list(reg.loaded_domains),
+        "requested_domains": list(reg.requested_domains),
+        "unknown_domains": list(reg.unknown_domains),
+        "rules_total": len(inventory),
+        "rules_loaded_count": len(loaded),
+        "loaded": loaded,
+        "not_loaded": not_loaded,
+        "empty_domains": empty_domains,
+    }
 
 
 def _enforce_zone(f: Finding) -> Finding:
@@ -195,6 +230,7 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
     reg.load_compiled(compiled_path, domains=domains, config_dir=config_dir)
     findings += reg.run(schema, llm, glossary, cfg)
     domains_loaded = reg.loaded_domains
+    rule_coverage = _rule_coverage(reg)
 
     # Business key metadata is explicit and independently validated. A sorting
     # key or ClickHouse PRIMARY KEY never silently becomes a business key.
@@ -207,7 +243,7 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
                 f"Business key metadata 指向不存在的表 '{table_name}'。",
                 severity="error", source="rule", zone=ZONE_GATING,
                 expected="metadata 表名存在於 DDL", actual="DDL 無此表",
-                fix="修正 config/cases/<DDL名>.yaml 的 business_keys 表名"))
+                fix="修正 context.md front-matter 的 business_keys 表名"))
             continue
         missing = [key for key in keys if table.col(str(key)) is None]
         if missing:
@@ -216,7 +252,7 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
                 f"Business key metadata 含不存在欄位 {missing}。",
                 severity="error", source="rule", zone=ZONE_GATING,
                 expected="business key 欄位存在於表", actual=f"缺少 {missing}",
-                fix="修正 case config 的 business_keys 或補上 DDL 欄位"))
+                fix="修正 context.md 的 business_keys 或補上 DDL 欄位"))
     if key_errors:
         findings += key_errors
     elif business_keys:
@@ -227,7 +263,7 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
     else:
         findings.append(Finding(
             "BUSINESS_KEY.METADATA", "structural", "skipped", "(schema)",
-            "case config 未提供 business_keys，無法確認 business key。",
+            "context.md 未提供 business_keys，無法確認 business key。",
             severity="info", source="rule", zone=ZONE_GATING))
 
     # Domain scope is an explicit checking result. Missing selection is safe:
@@ -237,15 +273,15 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
             "DOMAIN.SCOPE", "structural", "warning", "(domains)",
             f"未知 domain：{reg.unknown_domains}；已略過，本次載入 {domains_loaded}。",
             severity="warning", source="rule", zone=ZONE_GATING,
-            expected="domain 存在於 config/domain/<domain>",
+            expected="domain 存在於 config/<domain>",
             actual=f"未知 {reg.unknown_domains}",
-            fix="修正 case config 的 domains 或建立對應 domain 目錄"))
+            fix="修正 context.md 的 domains 或建立對應 domain 目錄"))
     elif not reg.requested_domains:
         findings.append(Finding(
             "DOMAIN.SCOPE", "structural", "warning", "(domains)",
             f"未指定 domain，依安全預設只載入 {COMMON_DOMAIN}。",
             severity="warning", source="rule", zone=ZONE_GATING,
-            expected="在 config/cases/<DDL名>.yaml 明確指定業務 domain",
+            expected="在 context.md front-matter 明確指定業務 domain",
             actual="未指定", fix="新增 domains；若確定只需共用規則可保持現狀"))
     else:
         findings.append(Finding(
@@ -262,7 +298,11 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
 
     # 正式區全域關聯圖：subject 之間的循環／基數矛盾（會擋）與影響分析（資訊）。
     from . import prodgraph
-    findings += prodgraph.run(schema, relations, production_root)
+    candidate_domains = [domain for domain in domains_loaded
+                         if domain.lower() != COMMON_DOMAIN.lower()]
+    candidate_domain = candidate_domains[0] if len(candidate_domains) == 1 else ""
+    findings += prodgraph.run(
+        schema, relations, production_root, candidate_domain=candidate_domain)
 
     # E2E 流程情境：標註本次的表位於哪些 domain 流程的哪一站（資訊，不擋）。
     from . import flows as domain_flows
@@ -292,6 +332,7 @@ def validate(ddl: str, cfg: dict, dialect: str = "clickhouse",
             "domains_requested": reg.requested_domains,
             "domains_unknown": reg.unknown_domains,
             "checking_rule_ids_loaded": reg.loaded_rule_ids,
+            "rule_coverage": rule_coverage,
             "lineage": lineage_meta,
             "er_diagram": {
                 "source": (er_diagram or {}).get("source", ""),
