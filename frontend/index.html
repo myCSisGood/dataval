@@ -125,6 +125,33 @@
   .btn:disabled{ opacity:.45; cursor:not-allowed; }
   .banner{ background:var(--warn-bg); color:var(--warn); border-radius:9px;
     padding:10px 14px; font-size:13px; margin:8px 0; }
+
+  /* storage / diff / rulestory */
+  .split{ display:flex; gap:14px; flex-wrap:wrap; }
+  .split-l{ flex:1; min-width:240px; }
+  .split-r{ flex:2; min-width:300px; }
+  select{ width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--card); color:var(--ink); font-size:13px; }
+  details{ margin:4px 0; }
+  details details{ margin-left:14px; }
+  details summary{ cursor:pointer; font-size:13.5px; font-weight:600; padding:4px 0; }
+  #report-list{ display:flex; flex-wrap:wrap; gap:6px; }
+  .report-btn{ font-size:13px; }
+  .file-row{ padding:4px 6px; font-size:13px; cursor:pointer; border-radius:6px; }
+  .file-row:hover{ background:var(--info-bg); }
+  .file-kind{ display:inline-block; min-width:36px; font-size:10px; text-transform:uppercase;
+    color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:0 4px;
+    margin-right:6px; text-align:center; }
+  .file-pre{ background:var(--card); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; font-size:12px; overflow:auto; max-height:600px; white-space:pre-wrap;
+    font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .file-frame{ width:100%; height:600px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .story-item{ background:var(--card); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:10px; padding:10px 14px; margin:10px 0; }
+  .story-head{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .story-code{ font-weight:600; }
+  .story-item ul{ margin:5px 0 0; padding-left:18px; font-size:13px; }
+  .story-item li{ margin:3px 0; }
 </style>
 </head>
 <body>
@@ -135,13 +162,22 @@
 
   <div class="tabs">
     <button class="tab active" data-tab="report" onclick="showTab('report')">報告</button>
-    <button class="tab" data-tab="lineage" onclick="showTab('lineage')">Lineage</button>
     <button class="tab" data-tab="submit" onclick="showTab('submit')">送驗</button>
+    <button class="tab" data-tab="storage" onclick="showTab('storage')">存放區</button>
+    <button class="tab" data-tab="diff" onclick="showTab('diff')">Report diff</button>
+    <button class="tab" data-tab="impact" onclick="showTab('impact')">影響模擬</button>
+    <button class="tab" data-tab="rulestory" onclick="showTab('rulestory')">Rule story</button>
+    <button class="tab" data-tab="lineage" onclick="showTab('lineage')">Lineage</button>
   </div>
 
   <!-- 報告分頁 -->
   <div class="tabpane" id="pane-report">
-    <!-- empty state -->
+    <div id="report-list-box" class="hidden">
+      <div class="graph-hint">點一份報告即可檢視
+        <button class="btn-sm" style="float:right" onclick="loadReportList()">↻</button></div>
+      <div id="report-list"></div>
+    </div>
+    <!-- empty state（離線／找不到後端時的手動載入） -->
     <div id="drop">
       <h2>拖進一份報告，或選檔</h2>
       <p>接受 dataval 產生的 <span class="mono">reports/&lt;名&gt;.report.json</span></p>
@@ -157,8 +193,12 @@
   <!-- Lineage 分頁 -->
   <div class="tabpane hidden" id="pane-lineage">
     <div class="graph-box">
-      <h3>本報告的 lineage（單一 subject）</h3>
-      <div class="graph-hint" id="subj-hint">先在「報告」分頁載入一份含 lineage 的報告。</div>
+      <div class="row-inline" style="margin-bottom:6px">
+        <div style="flex:1"><label style="font-size:13px; color:var(--muted)">選報告</label>
+          <select id="lineage-report" onchange="pickLineageReport()"></select></div>
+      </div>
+      <h3>單一 subject 的 lineage</h3>
+      <div class="graph-hint" id="subj-hint">選一份含 lineage 的報告。</div>
       <div id="subj-graph"></div>
     </div>
     <div class="graph-box hidden" id="global-section">
@@ -175,21 +215,82 @@
       離線仍可用「報告」分頁載入既有 report.json。</div>
     <div class="field row-inline">
       <div style="flex:1"><label>subject 名稱（＝資料夾／檔名）</label>
-        <input id="sub-name" list="sub-list" placeholder="例：order" oninput="checkSubmitReady()"></div>
+        <input id="sub-name" list="sub-list" placeholder="例：order" oninput="checkSubmitReady()">
+        <span id="sub-dup" class="src" style="font-size:12px"></span></div>
       <button class="btn-sm" onclick="loadExisting()">載入既有</button>
       <datalist id="sub-list"></datalist>
     </div>
-    <div class="field"><label>① DDL（<span class="mono">&lt;名&gt;.sql</span>）</label>
-      <textarea id="sub-ddl" rows="8" oninput="checkSubmitReady()" placeholder="CREATE TABLE …"></textarea></div>
-    <div class="field"><label>② 樣本（DDL 每張表一份 CSV，首列＝表頭）
-        <button class="btn-sm" style="float:right" onclick="addSampleRow()">＋ 新增表樣本</button></label>
-      <div id="sub-samples"></div></div>
-    <div class="field"><label>③ relations.yaml（單表可寫 <span class="mono">relations: []</span>）</label>
-      <textarea id="sub-rel" rows="5" oninput="checkSubmitReady()" placeholder="relations: []"></textarea></div>
-    <div class="field"><label>④ context.md（front-matter＋「粒度」段落必填）</label>
-      <textarea id="sub-ctx" rows="6" oninput="checkSubmitReady()" placeholder="---&#10;subject: …&#10;---&#10;&#10;## 粒度（每張表一行代表什麼）&#10;…"></textarea></div>
+    <div class="field"><label>① DDL（<span class="mono">.sql / .ddl</span>）
+        <input type="file" accept=".sql,.ddl" style="float:right; font-size:12px"
+               onchange="loadFileInto(this,'sub-ddl')"></label>
+      <textarea id="sub-ddl" rows="8" oninput="checkSubmitReady()" placeholder="上傳檔案或直接貼上 CREATE TABLE …"></textarea></div>
+    <div class="field"><label>② 樣本資料（每張表一份 <span class="mono">.csv</span>，可多選；首列＝表頭）
+        <input type="file" accept=".csv" multiple style="float:right; font-size:12px"
+               onchange="loadSampleFiles(this)"></label>
+      <div id="sub-samples"></div>
+      <button class="btn-sm" style="margin-top:6px" onclick="addSampleRow()">＋ 手動新增一張表</button></div>
+    <div class="field"><label>③ ERD／關聯（<span class="mono">relations.yaml</span>；單表可寫 <span class="mono">relations: []</span>）
+        <input type="file" accept=".yaml,.yml" style="float:right; font-size:12px"
+               onchange="loadFileInto(this,'sub-rel')"></label>
+      <textarea id="sub-rel" rows="5" oninput="checkSubmitReady()" placeholder="上傳檔案或貼上 relations: []"></textarea></div>
+    <div class="field"><label>④ 語意描述（<span class="mono">context.md</span>；front-matter＋「粒度」必填）
+        <input type="file" accept=".md,.markdown,.txt" style="float:right; font-size:12px"
+               onchange="loadFileInto(this,'sub-ctx')"></label>
+      <textarea id="sub-ctx" rows="6" oninput="checkSubmitReady()" placeholder="上傳檔案或貼上 ---&#10;subject: …&#10;---&#10;&#10;## 粒度（每張表一行代表什麼）"></textarea></div>
     <button class="btn" id="sub-submit" disabled onclick="submitValidate()">送出驗證</button>
     <div id="submit-result" style="margin-top:16px"></div>
+  </div>
+
+  <!-- 存放區分頁 -->
+  <div class="tabpane hidden" id="pane-storage">
+    <div class="banner hidden" id="storage-offline">此分頁需要後端：請先跑
+      <span class="mono">.venv/bin/python webapp.py</span>。</div>
+    <div class="split">
+      <div class="split-l">
+        <div class="graph-hint">輸出資料夾（點檔案檢視）
+          <button class="btn-sm" style="float:right" onclick="loadOutputs()">↻</button></div>
+        <div id="output-tree"></div>
+      </div>
+      <div class="split-r">
+        <div class="graph-hint" id="file-title">選一個檔案檢視</div>
+        <div id="file-view"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report diff 分頁 -->
+  <div class="tabpane hidden" id="pane-diff">
+    <div class="banner hidden" id="diff-offline">此分頁需要後端：請先跑
+      <span class="mono">.venv/bin/python webapp.py</span>。</div>
+    <p class="graph-hint">只能比對「同一個系列（subject）」的不同版本——改規則後重新送驗會累積歷史版本。</p>
+    <div class="row-inline">
+      <div style="flex:1"><label>系列</label><select id="diff-series" onchange="fillDiffVersions()"></select></div>
+      <div style="flex:1"><label>舊版本</label><select id="diff-old"></select></div>
+      <div style="flex:1"><label>新版本</label><select id="diff-new"></select></div>
+      <button class="btn-sm" onclick="runDiff()">比對</button>
+    </div>
+    <div id="diff-result" style="margin-top:12px"></div>
+  </div>
+
+  <!-- 影響模擬分頁 -->
+  <div class="tabpane hidden" id="pane-impact">
+    <div class="banner hidden" id="impact-offline">此分頁需要後端：請先跑
+      <span class="mono">.venv/bin/python webapp.py</span>。</div>
+    <p class="graph-hint">用目前磁碟上的規則重跑正式區每個 subject，找出會「由合規變不合規」的
+      （靠「晉升時零 fail」不變量）。純只讀，不改任何檔。</p>
+    <button class="btn" onclick="runImpact()">執行模擬</button>
+    <div id="impact-result" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Rule story 分頁 -->
+  <div class="tabpane hidden" id="pane-rulestory">
+    <div class="banner hidden" id="rulestory-offline">此分頁需要後端：請先跑
+      <span class="mono">.venv/bin/python webapp.py</span>。</div>
+    <div class="graph-hint">規則版本歷程（最新在上）：每次規則集變更的 ➕新增／➖移除／✏️修改。
+      點「看這版全部規則」進到規則清單。
+      <button class="btn-sm" style="float:right" onclick="loadRuleHistory()">↻</button></div>
+    <div id="rulestory-view"></div>
+    <div id="rulestory-detail" class="hidden"></div>
   </div>
 </div>
 
@@ -329,8 +430,85 @@ function showTab(name){
     t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".tabpane").forEach(p =>
     p.classList.toggle("hidden", p.id !== "pane-" + name));
-  if (name === "lineage"){ renderSubjectLineage(); loadGlobalGraph(); }
+  if (name === "report"){ loadReportList(); }
+  if (name === "lineage"){ initLineageTab(); renderSubjectLineage(); loadGlobalGraph(); }
   if (name === "submit"){ initSubmitTab(); }
+  if (name === "storage"){ loadOutputs(); }
+  if (name === "diff"){ initDiffTab(); }
+  if (name === "impact"){ needBackend("impact-offline"); }
+  if (name === "rulestory"){ loadRuleHistory(); }
+}
+
+// ---- 報告清單（點按鈕檢視，取代拖拉檢視器） ----
+function loadReportList(){
+  const box = document.getElementById("report-list-box");
+  const list = document.getElementById("report-list");
+  if (!location.protocol.startsWith("http")){ box.classList.add("hidden"); return; }
+  fetch("/api/report-series").then(r => r.json()).then(d => {
+    const series = d.series || {}, names = Object.keys(series).sort();
+    box.classList.remove("hidden");
+    document.getElementById("drop").classList.add("hidden");  // 有後端就用清單，不用拖拉
+    if (!names.length){
+      list.innerHTML = `<p class="graph-hint">還沒有報告。到「送驗」分頁送一份，或跑 <span class="mono">python run.py</span>。</p>`;
+      return;
+    }
+    list.innerHTML = names.map(sub => {
+      const cur = series[sub].find(i => i.label === "目前") || series[sub][0];
+      return `<button class="btn-sm report-btn" data-path="${esc(cur.path)}">${esc(sub)}</button>`;
+    }).join(" ");
+    list.querySelectorAll(".report-btn").forEach(b =>
+      b.addEventListener("click", () => openReportInline(b.dataset.path)));
+  }).catch(() => box.classList.add("hidden"));
+}
+
+function openReportInline(path){
+  fetch("/api/file?path=" + encodeURIComponent(path)).then(r => r.json()).then(d => {
+    if (d.error){ fail(d.error); return; }
+    try { renderReport(JSON.parse(d.content), path); }
+    catch(e){ fail(e.message); }
+  }).catch(e => fail(String(e)));
+}
+
+// ---- 送驗：檔案上傳填入編輯框 ----
+function loadFileInto(input, targetId){
+  const f = input.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { document.getElementById(targetId).value = rd.result; checkSubmitReady(); };
+  rd.readAsText(f);
+}
+function loadSampleFiles(input){
+  [...input.files].forEach(f => {
+    const rd = new FileReader();
+    rd.onload = () => addSampleRow(f.name.replace(/\.csv$/i, ""), rd.result);
+    rd.readAsText(f);
+  });
+}
+
+// ---- Lineage：選要看哪份報告 ----
+function initLineageTab(){
+  const sel = document.getElementById("lineage-report");
+  if (!location.protocol.startsWith("http")){ return; }
+  fetch("/api/report-series").then(r => r.json()).then(d => {
+    const names = Object.keys(d.series || {}).sort();
+    sel.innerHTML = `<option value="">（目前載入的報告）</option>` + names.map(n => {
+      const cur = d.series[n].find(i => i.label === "目前") || d.series[n][0];
+      return `<option value="${esc(cur.path)}">${esc(n)}</option>`;
+    }).join("");
+  }).catch(() => {});
+}
+function pickLineageReport(){
+  const p = document.getElementById("lineage-report").value;
+  if (!p){ renderSubjectLineage(); return; }
+  fetch("/api/file?path=" + encodeURIComponent(p)).then(r => r.json()).then(d => {
+    try { currentReport = JSON.parse(d.content); renderSubjectLineage(); } catch(e){}
+  });
+}
+
+function needBackend(bannerId){
+  const up = location.protocol.startsWith("http");
+  const b = document.getElementById(bannerId);
+  if (b) b.classList.toggle("hidden", up);
+  return up;
 }
 
 // Longest-path layering; the loop caps at |nodes| iterations so cycles終止.
@@ -442,6 +620,7 @@ function loadGlobalGraph(){
 // ---- 送驗分頁（需要 webapp.py 後端；靜態檔案模式會提示） ----
 let submitInited = false;
 let submitFixes = [];
+let subjectNames = [];
 
 function initSubmitTab(){
   if (!document.querySelector("#sub-samples .sample-row")) addSampleRow();
@@ -451,8 +630,10 @@ function initSubmitTab(){
   fetch("/api/subjects").then(r => r.json()).then(d => {
     submitInited = true;
     banner.classList.add("hidden");
+    subjectNames = (d.subjects || []).map(s => s.name);
     document.getElementById("sub-list").innerHTML =
-      (d.subjects || []).map(s => `<option value="${esc(s.name)}">`).join("");
+      subjectNames.map(n => `<option value="${esc(n)}">`).join("");
+    checkSubmitReady();
   }).catch(() => banner.classList.remove("hidden"));
 }
 
@@ -485,9 +666,12 @@ function checkSubmitReady(){
   const val = id => (document.getElementById(id).value || "").trim();
   const samples = collectSamples();
   const hasSample = Object.values(samples).some(v => v.trim());
-  const ready = val("sub-name") && val("sub-ddl") && val("sub-rel") &&
-                val("sub-ctx") && hasSample;
+  const nm = val("sub-name");
+  const ready = nm && val("sub-ddl") && val("sub-rel") && val("sub-ctx") && hasSample;
   document.getElementById("sub-submit").disabled = !ready;
+  const dup = document.getElementById("sub-dup");
+  if (dup) dup.textContent = (nm && subjectNames.includes(nm))
+    ? "⚠️ 已存在：送出會覆蓋此 subject 的 input/" : "";
 }
 
 function loadExisting(){
@@ -566,11 +750,14 @@ function renderSubmitResult(report){
       `<td class="mono">${esc(f.check_id)}</td><td class="mono">${esc(f.target)}</td>` +
       `<td>${esc(f.message)}${fix}</td><td>${btn}</td></tr>`;
   }).join("");
+  const applyAll = submitFixes.length
+    ? `<button class="btn-sm" id="apply-all" style="margin:4px 0">一鍵把全部修法插入 DDL 編輯框（${submitFixes.length}）</button>` : "";
   box.innerHTML =
     `<div class="verdict ${ok ? "ok" : "bad"}">${ok ? "✅ 合規" : "❌ 不合規"}` +
     `（會擋 ${s.blocking_count ?? s.fail ?? 0}）</div>` +
     `<p class="graph-hint">「套用修正」只把 <span class="mono">-- TODO(fix): …</span> 插進 DDL 編輯框，` +
-    `不自動送出也不改檔；你確認／修改後再按「送出驗證」重新驗證。</p>` +
+    `不自動送出也不改檔（避免機械修正產生語意錯卻看似合規）；你確認／修改後再按「送出驗證」重驗。</p>` +
+    applyAll +
     (rows ? `<table><thead><tr><th></th><th>檢查</th><th>對象</th><th>說明</th><th></th></tr></thead>` +
             `<tbody>${rows}</tbody></table>`
           : `<p class="graph-hint">沒有 fail／warning 項目。</p>`);
@@ -580,7 +767,198 @@ function renderSubmitResult(report){
     const old = b.textContent; b.textContent = "已插入 ✓";
     setTimeout(() => { b.textContent = old; }, 1200);
   }));
+  const aa = document.getElementById("apply-all");
+  if (aa) aa.addEventListener("click", () => {
+    submitFixes.forEach(f => applyFix(f.target, f.fix));
+    aa.textContent = "已全部插入 ✓（請檢視後按「送出驗證」重驗）";
+  });
   renderSubjectLineage();
+}
+
+// ---- 存放區：瀏覽 reports/ 等輸出並檢視檔案 ----
+let outputsCache = null;
+const STATUS_ICON = { fail: "❌", warning: "⚠️", pass: "✅", info: "ℹ️", skipped: "⏭️" };
+
+function nestEntries(entries){
+  const root = { dirs: {}, files: [] };
+  entries.forEach(e => {
+    const parts = e.name.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++){
+      node.dirs[parts[i]] = node.dirs[parts[i]] || { dirs: {}, files: [] };
+      node = node.dirs[parts[i]];
+    }
+    node.files.push({ name: parts[parts.length - 1], path: e.path, kind: e.kind });
+  });
+  return root;
+}
+function renderTree(node){
+  let html = "";
+  Object.keys(node.dirs).sort().forEach(d =>
+    html += `<details open><summary>${esc(d)}/</summary>${renderTree(node.dirs[d])}</details>`);
+  node.files.forEach(f =>
+    html += `<div class="file-row" data-path="${esc(f.path)}" data-kind="${esc(f.kind)}">` +
+            `<span class="file-kind">${esc(f.kind)}</span>${esc(f.name)}</div>`);
+  return html;
+}
+function loadOutputs(){
+  if (!needBackend("storage-offline")) return;
+  fetch("/api/outputs").then(r => r.json()).then(d => {
+    outputsCache = d;
+    const el = document.getElementById("output-tree");
+    el.innerHTML = (d.groups || []).map(g =>
+      `<details open><summary>${esc(g.name)} <span class="src">(${g.count})</span></summary>` +
+      renderTree(nestEntries(g.entries)) + `</details>`).join("");
+    el.querySelectorAll(".file-row").forEach(r =>
+      r.addEventListener("click", () => openFile(r.dataset.path, r.dataset.kind)));
+  }).catch(() => needBackend("storage-offline"));
+}
+
+function openFile(path, kind){
+  const title = document.getElementById("file-title");
+  const view = document.getElementById("file-view");
+  title.textContent = path;
+  view.innerHTML = `<p class="graph-hint">載入中…</p>`;
+  fetch("/api/file?path=" + encodeURIComponent(path)).then(r => r.json()).then(d => {
+    if (d.error){ view.innerHTML = `<div class="err">${esc(d.error)}</div>`; return; }
+    const body = kind === "html"
+      ? `<iframe class="file-frame" srcdoc="${esc(d.content)}"></iframe>`
+      : `<pre class="file-pre">${esc(d.content)}</pre>`;
+    const openBtn = path.endsWith(".report.json")
+      ? `<button class="btn-sm" id="open-in-report" style="margin-bottom:8px">在「報告」分頁開啟</button>` : "";
+    view.innerHTML = openBtn + body;
+    const ob = document.getElementById("open-in-report");
+    if (ob) ob.addEventListener("click", () => {
+      try { renderReport(JSON.parse(d.content), path); showTab("report"); }
+      catch(e){ fail(e.message); }
+    });
+  }).catch(() => view.innerHTML = `<div class="err">讀取失敗</div>`);
+}
+
+// ---- Report diff（只比對同系列的不同版本） ----
+let seriesCache = null;
+function initDiffTab(){
+  if (!needBackend("diff-offline")) return;
+  fetch("/api/report-series").then(r => r.json()).then(d => {
+    seriesCache = d.series || {};
+    const names = Object.keys(seriesCache).sort();
+    document.getElementById("diff-series").innerHTML = names.map(n =>
+      `<option value="${esc(n)}">${esc(n)}（${seriesCache[n].length} 版）</option>`).join("");
+    fillDiffVersions();
+  }).catch(() => needBackend("diff-offline"));
+}
+function fillDiffVersions(){
+  const s = document.getElementById("diff-series").value;
+  const vers = (seriesCache && seriesCache[s]) || [];
+  const opts = vers.map(v => `<option value="${esc(v.path)}">${esc(v.label)}</option>`).join("");
+  const os = document.getElementById("diff-old"), ns = document.getElementById("diff-new");
+  os.innerHTML = opts; ns.innerHTML = opts;
+  // 預設：新版＝目前（index 0），舊版＝最近一筆歷史（最後一個）
+  if (vers.length >= 2){ ns.selectedIndex = 0; os.selectedIndex = vers.length - 1; }
+}
+function runDiff(){
+  const oldP = document.getElementById("diff-old").value;
+  const newP = document.getElementById("diff-new").value;
+  const box = document.getElementById("diff-result");
+  if (!oldP || !newP){ box.innerHTML = `<div class="err">請先選兩份報告</div>`; return; }
+  box.innerHTML = `<p class="graph-hint">比對中…</p>`;
+  fetch(`/api/report-diff?old=${encodeURIComponent(oldP)}&new=${encodeURIComponent(newP)}`)
+    .then(r => r.json()).then(d => {
+      if (d.error){ box.innerHTML = `<div class="err">${esc(d.error)}</div>`; return; }
+      const ic = s => STATUS_ICON[s] || "·";
+      const li = f => `<li>${ic(f.status)} <span class="mono">${esc(f.check_id)}</span> @ ` +
+        `${esc(f.target)} — ${esc(f.message)}</li>`;
+      const chLi = f => `<li><span class="mono">${esc(f.check_id)}</span> @ ${esc(f.target)}` +
+        Object.entries(f.fields || {}).map(([k, v]) =>
+          `<br>&nbsp;&nbsp;${esc(k)}：${esc(String(v.from))} → ${esc(String(v.to))}`).join("") + `</li>`;
+      const sect = (title, items, fn) => items.length
+        ? `<div class="blk"><h3>${title}（${items.length}）</h3><ul>${items.map(fn).join("")}</ul></div>` : "";
+      const none = !d.added.length && !d.removed.length && !d.changed.length;
+      box.innerHTML =
+        `<div class="graph-hint">新增 ${d.added.length}｜消失 ${d.removed.length}｜改變 ${d.changed.length}</div>` +
+        sect("➕ 新增（新報告才有）", d.added, li) +
+        sect("➖ 消失（舊報告才有）", d.removed, li) +
+        sect("✏️ 改變（同 check_id＋對象）", d.changed, chLi) +
+        (none ? `<p class="graph-hint">兩份報告 findings 完全一致（僅時間戳可能不同）。</p>` : "");
+    }).catch(() => box.innerHTML = `<div class="err">比對失敗</div>`);
+}
+
+// ---- 影響模擬 ----
+function runImpact(){
+  if (!needBackend("impact-offline")) return;
+  const box = document.getElementById("impact-result");
+  box.innerHTML = `<p class="graph-hint">模擬中…（重跑正式區規則）</p>`;
+  fetch("/api/simulate-impact").then(r => r.json()).then(d => {
+    const rows = (d.subjects || []).map(r => {
+      const label = `${esc(r.domain)}/${esc(r.name)}`;
+      if (r.status === "compliant")
+        return `<div class="bs-row"><span class="bs-dot bs-pass"></span><span class="bs-title">${label}</span><span class="bs-t">✅ 維持合規</span></div>`;
+      if (r.status === "skipped")
+        return `<div class="bs-row"><span class="bs-dot bs-info"></span><span class="bs-title">${label}</span><span class="bs-t">⏭️ 略過（無法解析）</span></div>`;
+      return `<div class="bs-row"><span class="bs-dot bs-fail"></span><span class="bs-title">${label}</span>` +
+        `<span class="bs-t">❌ 新增 ${r.blocking.length} 筆 fail</span><div style="width:100%">` +
+        r.blocking.map(b => `<div class="src" style="margin-left:16px">- <span class="mono">${esc(b.check_id)}</span> @ ${esc(b.target)}：${esc(b.message)}</div>`).join("") +
+        `</div></div>`;
+    }).join("");
+    box.innerHTML =
+      `<div class="verdict ${d.regressed ? "bad" : "ok"}">${d.regressed ? "❌ " + d.regressed + " 個會變不合規" : "✅ 全部維持合規"}` +
+      `（共 ${d.total} 個 subject${d.skipped ? "，略過 " + d.skipped : ""}）</div>` +
+      `<div class="bsum">${rows || "<div class='bs-row'>正式區沒有 subject</div>"}</div>` +
+      `<div class="banner">${esc(d.limitation)}</div>`;
+  }).catch(() => box.innerHTML = `<div class="err">模擬失敗</div>`);
+}
+
+// ---- Rule story（規則版本歷程 + 點進去看整版規則）----
+function loadRuleHistory(){
+  if (!needBackend("rulestory-offline")) return;
+  const view = document.getElementById("rulestory-view");
+  document.getElementById("rulestory-detail").classList.add("hidden");
+  view.classList.remove("hidden");
+  view.innerHTML = `<p class="graph-hint">載入中…</p>`;
+  fetch("/api/rule-history").then(r => r.json()).then(d => {
+    const entries = (d.entries || []).slice().reverse();  // 最新在上
+    if (!entries.length){ view.innerHTML = `<p class="graph-hint">尚無規則版本紀錄。</p>`; return; }
+    const add = f => `<li>➕ <span class="mono">${esc(f.id)}</span>（${esc(f.domain)}／${esc(f.zone)}／${esc(f.enforcement)}）${f.title ? "：" + esc(f.title) : ""}</li>`;
+    const rm = f => `<li>➖ <span class="mono">${esc(f.id)}</span>（${esc(f.domain)}）</li>`;
+    const ch = f => `<li>✏️ <span class="mono">${esc(f.id)}</span>` +
+      Object.entries(f.fields || {}).map(([k, v]) =>
+        `<br>&nbsp;&nbsp;${esc(k)}：${esc(String(v.from))} → ${esc(String(v.to))}`).join("") + `</li>`;
+    view.innerHTML = entries.map(e => {
+      const when = (e.recorded_at || "").replace("T", " ").replace(/\+.*/, "");
+      return `<div class="story-item"><div class="story-head">` +
+        `<span class="story-code">${esc(when || "（時間未知）")}　共 ${e.rule_count} 條　➕${e.added.length} ➖${e.removed.length} ✏️${e.changed.length}</span>` +
+        `<button class="btn-sm" data-snap="${esc(e.snapshot_file)}">看這版全部規則（${e.rule_count}）→</button></div>` +
+        `<div class="src mono" style="font-size:11px">版本碼 ${esc((e.previous_code || "首版").slice(0, 8))} → ${esc((e.rule_version_code || "").slice(0, 8))}</div>` +
+        `<ul>${e.added.map(add).join("")}${e.removed.map(rm).join("")}${e.changed.map(ch).join("")}</ul></div>`;
+    }).join("");
+    view.querySelectorAll("button[data-snap]").forEach(b =>
+      b.addEventListener("click", () => showSnapshot(b.dataset.snap)));
+  }).catch(() => view.innerHTML = `<div class="err">載入失敗</div>`);
+}
+
+function showSnapshot(file){
+  const view = document.getElementById("rulestory-view");
+  const det = document.getElementById("rulestory-detail");
+  view.classList.add("hidden"); det.classList.remove("hidden");
+  det.innerHTML = `<p class="graph-hint">載入中…</p>`;
+  fetch("/api/rule-snapshot?file=" + encodeURIComponent(file)).then(r => r.json()).then(d => {
+    if (d.error){ det.innerHTML = `<div class="err">${esc(d.error)}</div>`; return; }
+    const byDom = {};
+    (d.rules || []).forEach(r => (byDom[r.domain || "?"] = byDom[r.domain || "?"] || []).push(r));
+    const doms = Object.keys(byDom).sort().map(dom =>
+      `<details open><summary>${esc(dom)}（${byDom[dom].length}）</summary>` +
+      `<table><thead><tr><th>規則</th><th>區</th><th>等級</th><th>說明</th></tr></thead><tbody>` +
+      byDom[dom].map(r => `<tr><td class="mono">${esc(r.id)}</td><td>${esc(r.zone)}</td>` +
+        `<td>${esc(r.enforcement)}</td><td>${esc(r.purpose || r.title || "")}</td></tr>`).join("") +
+      `</tbody></table></details>`).join("");
+    det.innerHTML = `<button class="btn-sm" onclick="backToStory()">← 回歷程</button>` +
+      `<div class="graph-hint">版本碼 ${esc((d.rule_version_code || "").slice(0, 8))} · ` +
+      `${esc((d.recorded_at || "").replace("T", " ").replace(/\+.*/, ""))} · 共 ${d.rule_count} 條</div>` + doms;
+  }).catch(() => det.innerHTML = `<div class="err">載入失敗</div>`);
+}
+function backToStory(){
+  document.getElementById("rulestory-detail").classList.add("hidden");
+  document.getElementById("rulestory-view").classList.remove("hidden");
 }
 
 let curFilter = "all";
@@ -637,6 +1015,8 @@ const src = new URLSearchParams(location.search).get("src");
 if (src){
   fetch(src).then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.json(); })
     .then(j => renderReport(j, src)).catch(e => fail(e.message + "（?src 需以 http 伺服器開啟，見 README）"));
+} else {
+  loadReportList();   // 有後端時直接列出可檢視的報告（取代拖拉）
 }
 </script>
 </body>

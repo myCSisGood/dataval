@@ -17,4 +17,5 @@ reports/**/*.report.html
 reports/**/*.advisory_result.json
 reports/**/*.advisory_prompt.md
 reports/**/*.subject_summary.md
+reports/.history/
 examples/lineage/reports/

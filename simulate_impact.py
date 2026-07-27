@@ -80,6 +80,31 @@ def simulate_subject(subject, cfg, production_root: str) -> tuple[str, list]:
     return ("regressed" if blocking else "compliant"), blocking
 
 
+LIMITATION = ("限制：正式區不存樣本，依賴樣本的規則（型別對樣本、join key 編碼、"
+              "relations 基數實檢等）在此模擬中無法重新檢驗，這類新違規不會被發現。"
+              "本結果是「至少會壞掉這些」，不是完整清單。")
+
+
+def simulate_all(production_root: str, cfg=None) -> dict:
+    """對整個正式區跑模擬，回傳可序列化的結構（供 CLI 與 webapp 共用）。"""
+    cfg = cfg or load_config(R.CONFIG)
+    results = []
+    for s in load_subjects(production_root):
+        status, blocking = simulate_subject(s, cfg, production_root)
+        results.append({
+            "domain": s.domain, "name": s.name, "status": status,
+            "blocking": [{"check_id": f.check_id, "target": f.target,
+                          "message": f.message} for f in blocking],
+        })
+    return {
+        "subjects": results,
+        "total": len(results),
+        "regressed": sum(1 for r in results if r["status"] == "regressed"),
+        "skipped": sum(1 for r in results if r["status"] == "skipped"),
+        "limitation": LIMITATION,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="模擬目前規則變更對正式區既有 subject 的影響（只讀）")
@@ -94,34 +119,27 @@ def main():
               "無可模擬。")
         return
 
-    cfg = load_config(R.CONFIG)
+    result = simulate_all(production_root)
     print("正式區規則影響模擬（規則來源：目前磁碟上的 config/）")
     print(f"掃描 {os.path.relpath(production_root, R.HERE)}/："
-          f"找到 {len(subjects)} 個 subject\n")
+          f"找到 {result['total']} 個 subject\n")
 
-    regressed = 0
-    skipped = 0
-    for s in subjects:
-        label = f"{s.domain}/{s.name}"
-        status, blocking = simulate_subject(s, cfg, production_root)
-        if status == "skipped":
-            skipped += 1
+    for r in result["subjects"]:
+        label = f"{r['domain']}/{r['name']}"
+        if r["status"] == "skipped":
             print(f"  {label}：⏭️  略過（DDL 無法解析或缺 .sql）")
-            continue
-        if status == "compliant":
+        elif r["status"] == "compliant":
             print(f"  {label}：✅ 維持合規")
-            continue
-        regressed += 1
-        print(f"  {label}：❌ 新增 {len(blocking)} 筆 fail（會由合規變不合規）")
-        for f in blocking:
-            print(f"     - {f.check_id} @ {f.target}：{f.message}")
+        else:
+            print(f"  {label}：❌ 新增 {len(r['blocking'])} 筆 fail（會由合規變不合規）")
+            for f in r["blocking"]:
+                print(f"     - {f['check_id']} @ {f['target']}：{f['message']}")
 
+    regressed, skipped = result["regressed"], result["skipped"]
     print("\n—— 統計 ——")
-    print(f"{len(subjects)} 個 subject 中，{regressed} 個會因目前規則變更而由合規變不合規。"
+    print(f"{result['total']} 個 subject 中，{regressed} 個會因目前規則變更而由合規變不合規。"
           + (f"（另有 {skipped} 個因無法解析而略過）" if skipped else ""))
-    print("\n⚠️  限制：正式區不存樣本，依賴樣本的規則（型別對樣本、join key 編碼、")
-    print("   relations 基數實檢等）在此模擬中無法重新檢驗，這類新違規不會被發現。")
-    print("   本結果是「至少會壞掉這些」，不是完整清單。")
+    print("\n⚠️  " + LIMITATION)
 
     sys.exit(1 if regressed else 0)
 

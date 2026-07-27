@@ -5,8 +5,18 @@
 產出的 `*.report.html` 的差別：那份把資料**烤進**單一 HTML；這份是**解耦的元件**，
 在執行期吃 JSON，所以別的專案可以餵自己的報告資料進來，不必重寫渲染。
 
-viewer 有三個分頁：**報告**（載入 report.json 檢視）、**Lineage**（把目前報告的
-lineage 畫成關聯圖；有後端時另畫全域正式區關聯圖）、**送驗**（需後端，見下方 webapp）。
+viewer 有七個分頁（多數需後端，見下方 webapp；純 `file://` 開啟時會提示先啟動 webapp）：
+
+- **報告**：有後端時直接列出可檢視的報告，點一下即檢視（不必拖拉）；離線時退回拖拉載入。
+- **送驗**：四個檔案上傳區（DDL／樣本 CSV 多選／relations.yaml／context.md）＋一行主題名稱；
+  上傳會填入可編輯的欄位，四件皆非空才可送出。名稱重複會提示會覆蓋。
+- **存放區**：把 reports／rules_history／drafts 依資料夾**分層**列出，點檔案即檢視
+  （html 內嵌 iframe、其餘純文字）；report.json 可一鍵在「報告」分頁開啟。
+- **Report diff**：先選**系列（subject）**，再選同系列的兩個版本比對——改規則後重新送驗會
+  累積歷史版本（存於 `reports/.history/`），才有多版本可比。
+- **影響模擬**：重跑正式區看規則變更會讓哪些 subject 由合規變不合規。
+- **Rule story**：規則版本歷程；點「看這版全部規則」進到該版完整規則清單（依 domain 分組）。
+- **Lineage**：可選要看哪一份報告的單一 subject 關聯圖；另畫全域正式區關聯圖。
 
 ## 立即使用
 
@@ -32,10 +42,17 @@ lineage 畫成關聯圖；有後端時另畫全域正式區關聯圖）、**送�
 | 路由 | 用途 |
 |---|---|
 | `GET /` | 這個 `index.html` |
-| `GET /api/subjects` | 列出 `input/` 下 subject 與四件齊全狀態 |
+| `GET /api/subjects` | 列出 `input/` 下 subject 與四件齊全狀態（送驗分頁的重名偵測也用它） |
 | `GET /api/subject?name=X` | 既有 subject 的四件內容（供「載入既有」填入編輯框） |
 | `GET /api/lineage-graph` | 正式區全域關聯圖（`prodgraph.export_graph`） |
-| `POST /api/validate` | 把四件寫入 `input/<名>/` 後驗證，回傳 report JSON |
+| `GET /api/outputs` | 列出 reports／rules_history／drafts 的輸出檔（存放區） |
+| `GET /api/file?path=X` | 檢視單一輸出檔（路徑限 reports 等允許根，防穿越） |
+| `GET /api/rule-history` | 規則版本歷程（`rules_history/*.json` 快照，供 Rule story） |
+| `GET /api/report-diff?old=&new=` | 比對兩份報告（`report.diff_findings`） |
+| `GET /api/report-series` | 報告依系列（subject）分組，含目前版與 `.history/` 歷史版 |
+| `GET /api/rule-snapshot?file=` | 某個 `rules_history` 快照的完整規則清單（rule story 點進去） |
+| `GET /api/simulate-impact` | 正式區規則影響模擬（`simulate_impact.simulate_all`） |
+| `POST /api/validate` | 把四件寫入 `input/<名>/`，驗證後把三式報告落地到 `reports/<域>/`（並存 `.history/` 時間戳版），回傳 report JSON |
 
 送驗流程：填四件 → 「送出驗證」（四件皆非空才啟用）→ 看報告 → 對有修法的 finding 按
 「套用修正到編輯框」（只把 `-- TODO(fix): …` 插進 DDL 編輯框，**不自動送出也不改檔**）
